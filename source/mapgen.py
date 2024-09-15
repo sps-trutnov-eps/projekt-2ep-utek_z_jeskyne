@@ -9,9 +9,9 @@ running = True
 ##
 
 p_fork = 0.12
-p_tweak = 0.23
-p_edge = 0.4
-p_end = 0.035
+p_tweak = 0.36
+p_edge = 0.56
+p_end = 0.01
 r = 250
 drops = []
 chaos = set()
@@ -64,7 +64,7 @@ class drop : #Kapka. Zanechává za sebou jednotky. Rádoby erozní typ mapgenu.
 		self.x += norm.x * r * (1.3 if im else 1)
 		self.y += norm.y * r * (1.3 if im else 1)
 		self.scale = self.cur.scale #V případě že byla tato jeskyně posílena voláním rec_scale
-		self.scale -=0.1
+		self.scale -=0.04
 		if not im : #Po rozdvojení kapek, aby kapka ihned nesklouzla zpět a vyvolala rec_scale, dostane jedno kolo s imunitou vůči tomu. TODO: co ta orig kapka
 			for x in chaos :
 				if abs(x.x-self.x) <= r*0.8 and abs(x.y-self.y) <= r*0.8 and x != self.cur : #TODO započítat velikost #*(x.scale/3)*(self.scale/3)
@@ -75,15 +75,14 @@ class drop : #Kapka. Zanechává za sebou jednotky. Rádoby erozní typ mapgenu.
 		self.trace() #zaznamenat posun s node
 pygame.time.set_timer(10, 300)
 drops.append(drop(0,1500,6))
-drops.append(drop(500,1500,6))
-drops.append(drop(-900,1500,6))
-drops.append(drop(-400,1900,6))
 while running:
 	for event in pygame.event.get():
 		if event.type == 10 :
 			for x in drops :
 				x.move_dir()
 			print(len(chaos))
+			# if random.random() >= 0.8 :
+			# 	drops.append(drop(random.randint(-4500,4500),random.randint(500,3000),random.randint(2,8)))
 		if event.type == pygame.QUIT:
 			running = False
 	
@@ -92,8 +91,11 @@ while running:
 		pygame.draw.circle(screen, (255,0,0),(x.x/15+640,x.y/15),5,2)
 	for x in chaos :
 		pygame.draw.circle(screen, (255,255,255),(x.x/15+640,x.y/15),4)
-	if len(drops) <1 :
+	if pygame.mouse.get_pressed()[0] :
+		drops.append(drop((pygame.mouse.get_pos()[0]-640)*15,pygame.mouse.get_pos()[1]*15,6))
+	if pygame.key.get_pressed()[pygame.K_SPACE] :
 		running=False
+		
 	pygame.display.flip()
 
 	clock.tick(20)
