@@ -129,7 +129,7 @@ if __name__ == '__main__':
 
     first_gen = True
     timer = 12
-    
+    #
     running = True
     while running == True:
         clock.tick(3)
