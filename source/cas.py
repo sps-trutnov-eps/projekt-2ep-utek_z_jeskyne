@@ -1,8 +1,6 @@
 ##### RANDOM MAP GENERATOR #####
 import pygame
 import random
-import math
-import time
 
 
 class MapGrid():
@@ -83,7 +81,7 @@ class MapGrid():
                     number_of_neighbors = close_neighbors + far_neighbors
 
                     # decide the what the next cell will be based on these rules
-                    if number_of_neighbors > random.choice([3,4,5]):
+                    if number_of_neighbors > random.choice([4]):
                         next_cell = 1
 
                     else:
