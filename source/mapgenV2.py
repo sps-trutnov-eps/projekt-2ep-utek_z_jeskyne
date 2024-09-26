@@ -29,14 +29,14 @@ def vhard(x,y,vec, r = 7) : #Pamatovat že je to programovaný v [sloupec][index
 		bres = res
 		if up : #hihi hehe pokud int
 			p_angle-= 90/2^i
-		rax+=hval[mapg.outside_terrain_grid[i-res][res]]
+		rax+=hval[mapg.outside_terrain_grid[x+(i-res)*a][y+res*b]]
 	return rax
 class kapka :
 	def __init__(self, pos, scale) -> None:
 		self.x = pos[0]
-		self.y = pos[1] # 0 je max obrazovky i.e. negativní vektory posouvají nahoru
+		self.y = pos[1] # Změna!! y=0 je nyní dolní okraj obrazovky 
 		self.scale = scale
-		self.pref = pygame.Vector2(0,1)
+		self.pref = pygame.Vector2(0,-1)
 	def mpos(self) :
 		#
 		
