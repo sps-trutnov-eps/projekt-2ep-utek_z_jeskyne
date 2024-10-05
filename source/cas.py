@@ -11,7 +11,7 @@ class MapGrid():
         self.map_height = map_width
 
         # generate outside rooms
-        self.outside_terrain_grid = self._generate_empty_noise_grid(self.map_width, self.map_height)
+        self.map = self._generate_empty_noise_grid(self.map_width, self.map_height)
 
     def _generate_empty_noise_grid(self, map_width, map_height):
         '''
@@ -26,6 +26,8 @@ class MapGrid():
                 new_map_grid[x].append(random.choice([0,1])) # fill in our rows
 
         return new_map_grid
+    def setblock(self, pos, id = 2) :
+        self.map[pos[0]][pos[1]] = 2
 
 
 

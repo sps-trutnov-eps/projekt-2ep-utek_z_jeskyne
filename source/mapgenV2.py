@@ -1,25 +1,19 @@
-﻿import pygame
+﻿import math
+import pygame
 import cas
 import threading
 
 mapg = cas.MapGrid(200,100)
-mapg._generate_outside_terrain(mapg.outside_terrain_grid, 3) # zatím jen 0 a 1, mají přidružené k tomu ještě tvrdost kvůli budoucím materiálům
+mapg._generate_outside_terrain(mapg.map, 3) # zatím jen 0 a 1, mají přidružené k tomu ještě tvrdost kvůli budoucím materiálům
 
 vecs = [-80, -40, 0, 40, 80]
 hval = (1, 0.3) #hodnoty tvrdosti
 
-def vhard(x,y,vec, r = 7) : #Pamatovat že je to programovaný v [sloupec][index] systému, to jest x, y
-	if vec.x <=0 :
-		a=-1
-	else :
-		a=1
-	if vec.y <=0 :
-		b=-1
-	else :
-		b=1
+def vhard(x,y,vec, r = 1, hd=True) : #Pamatovat že je to programovaný v [sloupec][index] systému, to jest x, y
 	p_angle = vec.angle_to(pygame.Vector2(0,1))%90
 
-	rax = 0
+	if hd : 
+		rax = 0
 	res = 0
 	bres = 0
 	up = 0
@@ -29,7 +23,10 @@ def vhard(x,y,vec, r = 7) : #Pamatovat že je to programovaný v [sloupec][index
 		bres = res
 		if up : #hihi hehe pokud int
 			p_angle-= 90/2^i
-		rax+=hval[mapg.outside_terrain_grid[x+(i-res)*a][y+res*b]]
+		if hd :
+			rax+=hval[mapg.map[x+math.copysign((i-res), vec.x)][y+math.copysign(res, vec.y)]]
+		elif i == r :
+			return (x+math.copysign((i-res), vec.x),y+math.copysign(res, vec.y))
 	return rax
 class kapka :
 	def __init__(self, pos, scale) -> None:
@@ -38,7 +35,14 @@ class kapka :
 		self.scale = scale
 		self.pref = pygame.Vector2(0,-1)
 	def mpos(self) :
-		#
+		self.pref += pygame.Vector2(0,-0.1)
+		m = 0
+		for i in vecs :
+			if vhard(self.x,self.y,self.pref.rotate(m), r = 5) > vhard(self.x,self.y,self.pref.rotate(i), r = 5) :
+				m = i
+		
+		for i in 5 :
+			mapg.map[vhard(vec)]
 		
 		
 running = True
