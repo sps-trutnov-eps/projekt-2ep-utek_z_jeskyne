@@ -9,7 +9,7 @@ mapg._generate_outside_terrain(mapg.map, 3) # zatím jen 0 a 1, mají přidruže
 vecs = [-80, -40, 0, 40, 80]
 hval = (1, 0.3) #hodnoty tvrdosti
 
-def vhard(x,y,vec, r = 1, hd=True) : #Pamatovat že je to programovaný v [sloupec][index] systému, to jest x, y
+def vhard(x,y,vec, r = 5, hd=True, bid = -1) : #Pamatovat že je to programovaný v [sloupec][index] systému, to jest x, y
 	p_angle = vec.angle_to(pygame.Vector2(0,1))%90
 
 	if hd : 
@@ -25,6 +25,8 @@ def vhard(x,y,vec, r = 1, hd=True) : #Pamatovat že je to programovaný v [sloup
 			p_angle-= 90/2^i
 		if hd :
 			rax+=hval[mapg.map[x+math.copysign((i-res), vec.x)][y+math.copysign(res, vec.y)]]
+		if bid != -1 :
+			hval[mapg.map[x+math.copysign((i-res), vec.x)][y+math.copysign(res, vec.y)]] = bid
 		elif i == r :
 			return (x+math.copysign((i-res), vec.x),y+math.copysign(res, vec.y))
 	return rax
@@ -38,11 +40,11 @@ class kapka :
 		self.pref += pygame.Vector2(0,-0.1)
 		m = 0
 		for i in vecs :
-			if vhard(self.x,self.y,self.pref.rotate(m), r = 5) > vhard(self.x,self.y,self.pref.rotate(i), r = 5) :
+			if vhard(self.x,self.y,self.pref.rotate(m)) > vhard(self.x,self.y,self.pref.rotate(i)) :
 				m = i
+		self.pref.rotate_ip(i)
+		vhard(self.x,self.y,self.pref, hd=False, bid=2)
 		
-		for i in 5 :
-			mapg.map[vhard(vec)]
 		
 		
 running = True
