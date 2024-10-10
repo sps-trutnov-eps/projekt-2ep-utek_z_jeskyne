@@ -27,12 +27,12 @@ class character(pygame.sprite.Sprite):
 
 	def update(self, time_passed):
 		pressed = pygame.key.get_pressed()
-		if event.type == pygame.KEYDOWN:
+		if event.type == pygame.KEYDOWN: #toto handeluje plazeni / chozeni
 			if event.key == pygame.K_RCTRL:
 				if self.cooldown <= 0:
 					if self.Zet == 1: #TOTO JE PLAZENI
 						self.CharacterSirka, self.CharacterVyska= 150, 50
-						self.GroundSpeed = 150
+						self.GroundSpeed = 50
 						self.image = pygame.Surface((self.CharacterSirka, self.CharacterVyska))
 						self.image.fill((255, 0, 0))
 						self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y)))
@@ -119,8 +119,29 @@ AllCaveSprites.add(Bloky)
 
 OnTopBlock = True #jak vim ze je postava na hore na bloku a nemam aplikovat teleport do strany
 jumping = False 
-#TODO: kdyz jses ve skoku a zaroven jdes do strany, aby te to neteleportovalo na kraj bloku
 
+class Enemy(pygame.sprite.Sprite): #toto bude nepritel
+	def __init__(self, x, y, OnGround):
+		super().__init__()
+		self.pos = pygame.math.Vector2(x, y)
+		self.move = pygame.math.Vector2()
+		self.OnGround = OnGround
+#		self.image = pygame.image.load('character.png').convert_alpha()
+		self.image = pygame.Surface((CharacterSirka, CharacterVyska))
+		self.image.fill((255, 0, 0)) 
+		self.rect = self.image.get_rect(midbottom = (round(self.pos.x), round(self.pos.y)))
+		self.GroundSpeed = 235	#Rychlost pohybu
+    def patrol():
+        self.move.x += self.GroundSpeed
+    def hunt():
+        #showdown
+        print("1889")
+
+
+ActualInstance = Enemy(800, 700, True)
+EnemySprite = pygame.sprite.Single()
+EnemySprite.add(ActualInstance)
+        
 while running:
 	for event in pygame.event.get():
 		if event.type == pygame.QUIT:
@@ -131,10 +152,6 @@ while running:
 
 	KolizovanySprite = pygame.sprite.spritecollide(Hrac, AllCaveSprites, False)
 
-
-
-
-	
 	
 	#KOLIZE SE ZDMI
 	Hrac.rect.centerx = round(Hrac.pos.x)
