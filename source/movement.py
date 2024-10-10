@@ -6,46 +6,71 @@ pygame.init()
 screen = pygame.display.set_mode((1280, 720))
 clock = pygame.time.Clock()
 running = True
-OnGround = True
-AirSpeed = 260		#rychlost pohybu mid air
-GroundSpeed = 235	#rychlost pohybu normalne
+
+
 
 class character(pygame.sprite.Sprite):
-	def __init__(self, x, y, HP, OnGround):
+	def __init__(self, x, y, HP, OnGround, CharacterSirka, CharacterVyska):
 		super().__init__()
 		self.pos = pygame.math.Vector2(x, y)
 		self.move = pygame.math.Vector2()
 		self.HP = HP
 		self.OnGround = OnGround
 #		self.image = pygame.image.load('character.png').convert_alpha()
-		self.image = pygame.Surface((50, 150))
+		self.image = pygame.Surface((CharacterSirka, CharacterVyska))
 		self.image.fill((255, 0, 0)) 
 		self.rect = self.image.get_rect(midbottom = (round(self.pos.x), round(self.pos.y)))
+		self.Zet = 1 #pro potreby zmeny Postavy mezi plazenim a stojenim
+		self.cooldown = 0	#Cooldown mezi zmenenim stavu (stani/plazeni)
+		self.GroundSpeed = 235	#rychlost pohybu normalne
 
 
 	def update(self, time_passed):
 		pressed = pygame.key.get_pressed()
-		if pressed[pygame.K_LEFT] or pressed[pygame.K_a]:# pohyb doleva a ruzne rychlosti ve vzduchu a na zemi
-			if not self.OnGround:
-				self.move.x -= AirSpeed
-			else:
-				self.move.x -= GroundSpeed
-		if pressed[pygame.K_RIGHT] or pressed[pygame.K_d]:# pohyb doprava a ruzne rychlosti ve vzduchu a na zemi
-			if not self.OnGround:
-				self.move.x += AirSpeed
-			else:
-				self.move.x += GroundSpeed	
+		if event.type == pygame.KEYDOWN:
+			if event.key == pygame.K_RCTRL:
+				if self.cooldown <= 0:
+					if self.Zet == 1: #TOTO JE PLAZENI
+						self.CharacterSirka, self.CharacterVyska= 150, 50
+						self.GroundSpeed = 150
+						self.image = pygame.Surface((self.CharacterSirka, self.CharacterVyska))
+						self.image.fill((255, 0, 0))
+						self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y)))
+						self.Zet *= -1
+					elif self.Zet == -1: #TOHLE JE KDYZ HRAC STOJI
+						#Check, jestli je nad tebou nejaky blok, ktery by mohl branit zvednuti se
+						self.CharacterSirka, self.CharacterVyska= 50, 150
+						self.GroundSpeed = 235
+						self.image = pygame.Surface((self.CharacterSirka, self.CharacterVyska))
+						self.image.fill((255, 0, 0))
+						self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y)))
+						self.Zet *= -1
+					self.cooldown = 2
+
+		if self.cooldown > 0:
+			self.cooldown -= time_passed
+
+		if pressed[pygame.K_LEFT] or pressed[pygame.K_a]: #pohyb doleva
+			self.move.x -= self.GroundSpeed
+		if pressed[pygame.K_RIGHT] or pressed[pygame.K_d]:#pohyb doleva
+				self.move.x += self.GroundSpeed	
 
 		if pressed[pygame.K_UP] or pressed[pygame.K_w]: #Skakani
 			if self.OnGround:
-				self.move.y = -1150
+				if self.Zet == 1:
+					self.move.y = -1150
+				else:
+					self.move.y = -300
 			jumping = True
 		else:
 			jumping = False
 
 		if pressed[pygame.K_DOWN] or pressed[pygame.K_s]: #pohyb dolu (asi pak po zdech)
 			if not self.OnGround:
-				self.move.y += GroundSpeed
+				self.move.y += self.GroundSpeed
+
+		if pressed[pygame.K_RCTRL]:
+			CharacterVyska = 50
 
 		self.pos = self.pos + self.move * time_passed	#kalkulace pohybu pana Kalkulatora
 		self.move.x *= 0.8	#Treni
@@ -66,9 +91,11 @@ class character(pygame.sprite.Sprite):
 		else:
 			self.OnGround = False
 
+		return pressed
 
 
-Hrac = character(100, 720, 100, OnGround)
+
+Hrac = character(100, 700, 100, OnGround = False, CharacterSirka = 50, CharacterVyska = 150)
 
 allSprites = pygame.sprite.GroupSingle()
 allSprites.add(Hrac)
@@ -80,13 +107,14 @@ class environmentblock(pygame.sprite.Sprite):
 		self.move = pygame.math.Vector2()
 		self.sirka = sirka
 		self.vyska = vyska
-		self.image = pygame.Surface((200, 20))
+		self.image = pygame.Surface((self.sirka, self.vyska))
 		self.image.fill((255, 255, 255)) 
-		self.rect = self.image.get_rect(midbottom = (round(self.pos.x), round(self.pos.y)))
+		self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y)))
 
 
 AllCaveSprites = pygame.sprite.Group()
-Bloky = (environmentblock(300, 680, 200, 50),environmentblock(700, 450, 600, 50),environmentblock(600, 610, 10, 70))
+Bloky = (environmentblock(300, 680, 100, 20),environmentblock(850, 480, 100, 20),environmentblock(600, 610, 100, 20),environmentblock(850, 180, 100, 20),
+		 environmentblock(640, 710, 1280, 20))
 AllCaveSprites.add(Bloky)
 
 OnTopBlock = True #jak vim ze je postava na hore na bloku a nemam aplikovat teleport do strany
@@ -102,6 +130,10 @@ while running:
 	time_passed = clock.tick(60) / 1000.0
 
 	KolizovanySprite = pygame.sprite.spritecollide(Hrac, AllCaveSprites, False)
+
+
+
+
 	
 	
 	#KOLIZE SE ZDMI
@@ -110,17 +142,17 @@ while running:
 	for sprite in KolizovanySprite:
 		if not OnTopBlock and not jumping: #pokud hrac neni na vrchu bloku
 			if Hrac.move.x > 0:
-				if Hrac.rect.right > sprite.rect.left:
+				if Hrac.rect.right > sprite.rect.left and not jumping:
 					Hrac.rect.right = sprite.rect.left  
 					Hrac.move.x = 0  
 					Hrac.pos.x = Hrac.rect.centerx #sjednoceni logicke a graficke casti hrace
-					print('kolize v levo')
+#					print('kolize v levo')
 			if Hrac.move.x < 0:
-				if Hrac.rect.left < sprite.rect.right:
+				if Hrac.rect.left < sprite.rect.right and not jumping:
 					Hrac.rect.left = sprite.rect.right
 					Hrac.move.x = 0
 					Hrac.pos.x = Hrac.rect.centerx
-					print('kolize v pravo')
+#					print('kolize v pravo')
 
 		if Hrac.move.y > 0: #pohyb dolu
 			if Hrac.rect.bottom > sprite.rect.top:
@@ -129,21 +161,15 @@ while running:
 				Hrac.pos.y = Hrac.rect.bottom +1
 				Hrac.OnGround = True
 				OnTopBlock = True
-				print('kolize dole')
+#				print('kolize dole')
 		elif Hrac.move.y < 0: #pohyb nahoru
 			if Hrac.rect.top > sprite.rect.bottom:
 				Hrac.rect.top = sprite.rect.bottom
 				Hrac.move.y *= -1
 				Hrac.pos.y = Hrac.rect.bottom
-				print('kolize nahore')
+#				print('kolize nahore')
 		else:
 			OnTopBlock = False
-
-
-
-#	Hrac.pos.x = Hrac.rect.centerx
-#	Hrac.pos.y = Hrac.rect.bottom
-
 
 	allSprites.update(time_passed)
 
