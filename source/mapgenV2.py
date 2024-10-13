@@ -1,14 +1,14 @@
 ﻿import math
 import pygame
 import cas
-import threading
+#import threading
 
-mapg = cas.MapGrid(200,100)
-mapg._generate_outside_terrain(mapg.map, 3) # zatím jen 0 a 1, mají přidružené k tomu ještě tvrdost kvůli budoucím materiálům
+mapg = cas.MapGrid(200,50)
+mapg.map = mapg._generate_outside_terrain(mapg.map, 4) # zatím jen 0 a 1, mají přidružené k tomu ještě tvrdost kvůli budoucím materiálům
 
-vecs = [-80, -40, 0, 40, 80]
-hval = (1, 0.3) #hodnoty tvrdosti
-
+vecs = (-80, -40, 0, 40, 80)
+hval = (1, 0.3, 0) #hodnoty tvrdosti
+hcol = ((150,150,150), (75,75,75), (0,0,0))
 def vhard(x,y,vec, r = 5, hd=True, bid = -1) : #Pamatovat že je to programovaný v [sloupec][index] systému, to jest x, y
 	p_angle = vec.angle_to(pygame.Vector2(0,1))%90
 
@@ -17,16 +17,16 @@ def vhard(x,y,vec, r = 5, hd=True, bid = -1) : #Pamatovat že je to programovan�
 	res = 0
 	bres = 0
 	up = 0
-	for i in r :
-		up = (1 if 90/2^i < p_angle else 0)
+	for i in range(r) :
+		up = (1 if 90/2**i < p_angle else 0)
 		res = bres + up
 		bres = res
 		if up : #hihi hehe pokud int
-			p_angle-= 90/2^i
+			p_angle-= 90/2**i
 		if hd :
 			rax+=hval[mapg.map[x+math.copysign((i-res), vec.x)][y+math.copysign(res, vec.y)]]
 		if bid != -1 :
-			hval[mapg.map[x+math.copysign((i-res), vec.x)][y+math.copysign(res, vec.y)]] = bid
+			mapg.setblock((x+math.copysign((i-res), vec.x),y+math.copysign(res, vec.y)),hval[mapg.map[x+math.copysign((i-res), vec.x)][y+math.copysign(res, vec.y)]])
 		elif i == r :
 			return (x+math.copysign((i-res), vec.x),y+math.copysign(res, vec.y))
 	return rax
@@ -38,15 +38,34 @@ class kapka :
 		self.pref = pygame.Vector2(0,-1)
 	def mpos(self) :
 		self.pref += pygame.Vector2(0,-0.1)
+		self.scale *= 1.1
 		m = 0
 		for i in vecs :
-			if vhard(self.x,self.y,self.pref.rotate(m)) > vhard(self.x,self.y,self.pref.rotate(i)) :
+			if vhard(self.x,self.y,self.pref.rotate(m)) > vhard(self.x,self.y,self.pref.rotate(i)) : #5 def r
 				m = i
-		self.pref.rotate_ip(i)
-		vhard(self.x,self.y,self.pref, hd=False, bid=2)
+		self.pref.rotate_ip(m)
+		self.scale -= self.scale*m/10
+		m=vhard(self.x,self.y,self.pref, hd=False, bid=2)
+		self.x = m[0]
+		self.y = m[1]
 		
-		
-		
+
+pygame.init()
+kapky = []
+screen = pygame.display.set_mode((1280, 720))
 running = True
 while running :
-	pass
+	screen.fill((0,0,0))
+	for event in pygame.event.get():
+		if event.type == pygame.QUIT:
+			running = False
+	for i,x in enumerate(mapg.map) :
+		for j,y in enumerate(x) :
+			pygame.draw.rect(screen, hcol[y], (6.4*j,680-6.4*i,6.4,6.4))
+	for x in kapky :
+		x.mpos()
+	if pygame.mouse.get_pressed()[0] and pygame.mouse.get_pos()[1]>40 and pygame.mouse.get_pos()[1]<680 :
+		kapky.append(kapka((math.floor(pygame.mouse.get_pos()[0]/6.4),100-math.floor((pygame.mouse.get_pos()[1]-40)/6.4)), 5))
+	pygame.display.flip()
+	
+pygame.quit()

@@ -26,8 +26,8 @@ class MapGrid():
                 new_map_grid[x].append(random.choice([0,1])) # fill in our rows
 
         return new_map_grid
-    def setblock(self, pos, id = 2) :
-        self.map[pos[0]][pos[1]] = 2
+    def setblock(self, pos, bid) :
+        self.map[pos[0]][pos[1]] = bid
 
 
 
