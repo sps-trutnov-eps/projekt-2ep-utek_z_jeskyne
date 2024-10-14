@@ -198,7 +198,6 @@ class Enemy(pygame.sprite.Sprite):
                 print("ted vidi Hrace")
                 # self.hunt()
 
-        
 
     def killCheck(self):
         kolizeCheck = pygame.sprite.spritecollide(Hrac, EnemySprite, False)
