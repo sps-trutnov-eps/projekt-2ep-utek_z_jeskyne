@@ -1,3 +1,4 @@
+from tkinter import Toplevel
 import pygame
 from pygame import key
 import random
@@ -6,6 +7,7 @@ pygame.init()
 screen = pygame.display.set_mode((1280, 720))
 clock = pygame.time.Clock()
 running = True
+RED, GREEN, BLUE, BLACK, WHITE = ((255, 0, 0),(0,255,0),(0,0,255),(0,0,0),(255,255,255))
 
 class character(pygame.sprite.Sprite):
     def __init__(self, x, y, HP, OnGround, CharacterSirka, CharacterVyska):
@@ -16,7 +18,7 @@ class character(pygame.sprite.Sprite):
         self.OnGround = OnGround
         self.image = pygame.Surface((CharacterSirka, CharacterVyska))
         self.image.fill((255, 0, 0)) 
-        self.rect = self.image.get_rect(midbottom = (round(self.pos.x), round(self.pos.y)))
+        self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
         self.Zet = 1 #pro potreby zmeny Postavy mezi plazenim a stojenim
         self.cooldown = 0   #Cooldown mezi zmenenim stavu (stani/plazeni)
         self.GroundSpeed = 250  #rychlost pohybu normalne
@@ -112,18 +114,17 @@ class environmentblock(pygame.sprite.Sprite):
         self.move = pygame.math.Vector2()
         self.sirka = sirka
         self.vyska = vyska
-        self.Top_col = False
-        self.Bot_col = False
-        self.Lef_col = False
-        self.Rig_col = False
         self.image = pygame.Surface((self.sirka, self.vyska))
         self.image.fill((255, 255, 255)) 
-        self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y)))
+        self.rect = self.image.get_rect(topleft=(round(self.pos.x), round(self.pos.y)))
 
 AllCaveSprites = pygame.sprite.Group()
-Bloky = (environmentblock(300, 680, 100, 20),environmentblock(850, 480, 100, 20),environmentblock(600, 610, 100, 20),environmentblock(850, 180, 100, 20),
-         environmentblock(640, 710, 1280, 20),
-         environmentblock(720, 690, 100, 200))
+Bloky = (environmentblock(300, 680, 100, 20),
+         environmentblock(850, 480, 100, 70),
+         environmentblock(600, 610, 100, 70),
+         environmentblock(850, 380, 100, 90),
+         environmentblock(0, 710, 1280, 20), #podlaha
+         environmentblock(720, 500, 100, 200))
 AllCaveSprites.add(Bloky)
 
 OnTopBlock = True #jak vim ze je postava na hore na bloku a nemam aplikovat teleport do strany
@@ -138,7 +139,7 @@ class Enemy(pygame.sprite.Sprite):
         self.OnGround = OnGround
         self.image = pygame.Surface((80, 200))
         self.image.fill((200, 0, 200)) 
-        self.rect = self.image.get_rect(midbottom = (round(self.pos.x), round(self.pos.y)))
+        self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
         self.Speed = 100  #Rychlost pohybu
         self.CanCPlayer = False
 
@@ -187,18 +188,38 @@ class Enemy(pygame.sprite.Sprite):
     def patrol(self, Hrac, screen, AllCaveSprites):
             player_center = Hrac.rect.center
             enemy_center = self.rect.center
-            pygame.draw.line(screen,(255, 0, 0), player_center, enemy_center, 5)
+            player_top = (Hrac.rect.center[0], Hrac.rect.top)
+            enemy_top = (self.rect.center[0], self.rect.top)
+            
+            self.CanCPlayer_Top = True
+            self.CanCPlayer_Center = True
+
+            print(enemy_center, enemy_top)
+
             for block in AllCaveSprites:
-                if block.rect.clipline((player_center, enemy_center)):
-                    pygame.draw.line(screen, (0,0,255), player_center, enemy_center, 5)
-                    self.CanCPlayer = False
-                else:
-                    self.CanCPlayer = True
-            if self.CanCPlayer:
-                print("ted vidi Hrace")
+                if block.rect.clipline(player_center, enemy_center):
+                    self.CanCPlayer_Center = False
+                    break  #Jakmile neco blokuje vyhled enemy brejkujes loop
+            for block in AllCaveSprites:
+                if block.rect.clipline(player_top, enemy_top):
+                    self.CanCPlayer_Top = False
+                    break  #Jakmile neco blokuje vyhled enemy brejkujes loop
+
+    
+            #vykreslování car po checku
+            if self.CanCPlayer_Center:
+                pygame.draw.line(screen, RED, player_center, enemy_center, 5)
+            else:
+                pygame.draw.line(screen, BLUE, player_center, enemy_center, 5)
+            if self.CanCPlayer_Top:
+                pygame.draw.line(screen, RED, player_top, enemy_top, 5)
+            else:
+                pygame.draw.line(screen, BLUE, player_top, enemy_top, 5)
+
+            if self.CanCPlayer_Center or self.CanCPlayer_Top:
+                pass
                 # self.hunt()
 
-        
 
     def killCheck(self):
         kolizeCheck = pygame.sprite.spritecollide(Hrac, EnemySprite, False)
