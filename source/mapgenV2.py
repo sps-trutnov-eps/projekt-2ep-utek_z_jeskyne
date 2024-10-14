@@ -3,7 +3,7 @@ import pygame
 import cas
 #import threading
 
-mapg = cas.MapGrid(200,50)
+mapg = cas.MapGrid(200,100)
 mapg.map = mapg._generate_outside_terrain(mapg.map, 4) # zatím jen 0 a 1, mají přidružené k tomu ještě tvrdost kvůli budoucím materiálům
 
 vecs = (-80, -40, 0, 40, 80)
@@ -23,12 +23,12 @@ def vhard(x,y,vec, r = 5, hd=True, bid = -1) : #Pamatovat že je to programovan�
 		bres = res
 		if up : #hihi hehe pokud int
 			p_angle-= 90/2**i
-		if hd :
-			rax+=hval[mapg.map[x+math.copysign((i-res), vec.x)][y+math.copysign(res, vec.y)]]
 		if bid != -1 :
-			mapg.setblock((x+math.copysign((i-res), vec.x),y+math.copysign(res, vec.y)),hval[mapg.map[x+math.copysign((i-res), vec.x)][y+math.copysign(res, vec.y)]])
-		elif i == r :
-			return (x+math.copysign((i-res), vec.x),y+math.copysign(res, vec.y))
+			mapg.setblock((x+int(math.copysign((i-res), vec.x)),y+int(math.copysign(res, vec.y))),bid)
+		if hd :
+			rax+=hval[mapg.map[x+int(math.copysign((i-res), vec.x))][y+int(math.copysign(res, vec.y))]]
+		elif i == r-1 :
+			return (x+int(math.copysign((i-res), vec.x)),y+int(math.copysign(res, vec.y)))
 	return rax
 class kapka :
 	def __init__(self, pos, scale) -> None:
@@ -48,8 +48,6 @@ class kapka :
 		m=vhard(self.x,self.y,self.pref, hd=False, bid=2)
 		self.x = m[0]
 		self.y = m[1]
-		
-
 pygame.init()
 kapky = []
 screen = pygame.display.set_mode((1280, 720))
@@ -61,7 +59,7 @@ while running :
 			running = False
 	for i,x in enumerate(mapg.map) :
 		for j,y in enumerate(x) :
-			pygame.draw.rect(screen, hcol[y], (6.4*j,680-6.4*i,6.4,6.4))
+			pygame.draw.rect(screen, hcol[y], (math.floor(6.4*i),math.floor(680-6.4*j),7,7))
 	for x in kapky :
 		x.mpos()
 	if pygame.mouse.get_pressed()[0] and pygame.mouse.get_pos()[1]>40 and pygame.mouse.get_pos()[1]<680 :
