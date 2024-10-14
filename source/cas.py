@@ -8,7 +8,7 @@ class MapGrid():
 
         # set map values
         self.map_width = map_width
-        self.map_height = map_width
+        self.map_height = map_height    
 
         # generate outside rooms
         self.map = self._generate_empty_noise_grid(self.map_width, self.map_height)
