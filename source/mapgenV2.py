@@ -31,8 +31,8 @@ def vhard(x,y,vec, r = 5, hd=True, bid = -1) : #Pamatovat ≈æe je to programovan√
 			elif i == r-1 :
 				return (x+int(math.copysign((i-res), vec.x)),y+int(math.copysign(res, vec.y)))
 		except IndexError :
-			continue
-		except IndexError and i == r-1 and not hd :
+			raise OverflowError
+		if i == r-1 and not hd :
 			raise OverflowError
 	return rax
 class kapka :
