@@ -42,13 +42,13 @@ class kapka :
 		#self.scale = scale
 		self.pref = pygame.Vector2(0,-1)
 	def mpos(self) :
-		self.pref += pygame.Vector2(0,-0.1)
+		self.pref += pygame.Vector2(0,-0.5)
 		#self.scale *= 1.5
 		m = 0
 		for i in vecs :
 			if vhard(self.x,self.y,self.pref.rotate(m)) > vhard(self.x,self.y,self.pref.rotate(i)) : #5 def r
 				m = i
-		self.pref.rotate_ip(m)
+		self.pref= self.pref.normalize().rotate(m)
 		#self.scale -= self.scale*m/
 		m=vhard(self.x,self.y,self.pref, hd=False, bid=2)
 		self.x = m[0]
