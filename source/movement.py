@@ -118,13 +118,12 @@ class environmentblock(pygame.sprite.Sprite):
         self.image.fill((255, 255, 255)) 
         self.rect = self.image.get_rect(topleft=(round(self.pos.x), round(self.pos.y)))
 
+
 AllCaveSprites = pygame.sprite.Group()
-Bloky = (environmentblock(300, 680, 100, 20),
-         environmentblock(850, 480, 100, 70),
-         environmentblock(600, 610, 100, 70),
-         environmentblock(850, 380, 100, 90),
-         environmentblock(0, 710, 1280, 20), #podlaha
-         environmentblock(720, 500, 100, 200))
+Bloky = (environmentblock(0, 710, 1280, 50)) #podlaha
+for i in range(10):
+    x = (environmentblock((random.randint(0,1200)), (random.randint(500,700)), 50, 50))
+    AllCaveSprites.add(x)
 AllCaveSprites.add(Bloky)
 
 OnTopBlock = True #jak vim ze je postava na hore na bloku a nemam aplikovat teleport do strany
@@ -186,18 +185,24 @@ class Enemy(pygame.sprite.Sprite):
                 self.pos.y = self.rect.midbottom[1]
 
     def patrol(self, Hrac, screen, AllCaveSprites):
-            player_center = Hrac.rect.center
-            enemy_center = self.rect.center
+            player_bottom = (Hrac.rect.center[0], Hrac.rect.bottom)
             player_top = (Hrac.rect.center[0], Hrac.rect.top)
-            enemy_top = (self.rect.center[0], self.rect.top)
+            enemy_top = (self.rect.center[0], self.rect.top + 20)
             
             self.CanCPlayer_Top = True
             self.CanCPlayer_Center = True
+            
+            if self.move.x > 0: #pohyb doprava
+                self.Doprava = True
+                self.Doleva = False
 
-            print(enemy_center, enemy_top)
+            elif self.move.x < 0:
+                self.Doleva = True
+                self.Doprava = False
+
 
             for block in AllCaveSprites:
-                if block.rect.clipline(player_center, enemy_center):
+                if block.rect.clipline(player_bottom, enemy_top):
                     self.CanCPlayer_Center = False
                     break  #Jakmile neco blokuje vyhled enemy brejkujes loop
             for block in AllCaveSprites:
@@ -206,11 +211,11 @@ class Enemy(pygame.sprite.Sprite):
                     break  #Jakmile neco blokuje vyhled enemy brejkujes loop
 
     
-            #vykreslování car po checku
+            #vykreslovani
             if self.CanCPlayer_Center:
-                pygame.draw.line(screen, RED, player_center, enemy_center, 5)
+                pygame.draw.line(screen, RED, player_bottom, enemy_top, 5)
             else:
-                pygame.draw.line(screen, BLUE, player_center, enemy_center, 5)
+                pygame.draw.line(screen, BLUE, player_bottom, enemy_top, 5)
             if self.CanCPlayer_Top:
                 pygame.draw.line(screen, RED, player_top, enemy_top, 5)
             else:
