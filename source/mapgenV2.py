@@ -89,6 +89,6 @@ while running :
 		kapky.append(kapka((int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const),int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const))))
 	if pygame.mouse.get_pressed()[1] :
 		kapky = []
-	screen.blit(font.render(str(math.floor(pygame.mouse.get_pos()[0]/6.4)) + "  " + str(100-math.floor((pygame.mouse.get_pos()[1]-40)/6.4)), False,(255, 0,0)), pygame.mouse.get_pos())
+	screen.blit(font.render(str(int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const)) + "  " + str(int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const)), False,(255, 0,0)), pygame.mouse.get_pos())
 	pygame.display.flip()	
 pygame.quit()
