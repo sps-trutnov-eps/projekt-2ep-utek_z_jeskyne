@@ -4,11 +4,11 @@ import random
 
 
 class MapGrid():
-    def __init__(self, map_width, map_height):
+    def __init__(self, map_dims):
 
         # set map values
-        self.map_width = map_width
-        self.map_height = map_height    
+        self.map_width = map_dims[0]
+        self.map_height = map_dims[1]   
 
         # generate outside rooms
         self.map = self._generate_empty_noise_grid(self.map_width, self.map_height)

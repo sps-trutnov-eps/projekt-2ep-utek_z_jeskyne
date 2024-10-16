@@ -2,8 +2,10 @@
 import pygame
 import cas
 #import threading
-
-mapg = cas.MapGrid(200,100)
+ds = (150,200)
+res = (1280,720)
+const = min(res[0]/ds[0],res[1]/ds[1])
+mapg = cas.MapGrid(ds)
 mapg.map = mapg._generate_outside_terrain(mapg.map, 4) # zatím jen 0 a 1, mají přidružené k tomu ještě tvrdost kvůli budoucím materiálům
 
 vecs = (-80, -40, 0, 40, 80)
@@ -11,7 +13,7 @@ hval = (1, 0.3, 0) #hodnoty tvrdosti
 hcol = ((150,150,150), (75,75,75), (0,0,0))
 def vhard(x,y,vec, r = 5, hd=True, bid = -1) : #Pamatovat že je to programovaný v [sloupec][index] systému, to jest x, y
 	p_angle = vec.angle_to(pygame.Vector2(0,1))%90
-
+	
 	if hd : 
 		rax = 0
 	res = 0
@@ -36,10 +38,9 @@ def vhard(x,y,vec, r = 5, hd=True, bid = -1) : #Pamatovat že je to programovan�
 			raise OverflowError
 	return rax
 class kapka :
-	def __init__(self, pos, scale) -> None:
+	def __init__(self, pos) -> None:
 		self.x = pos[0]
 		self.y = pos[1] # Změna!! y=0 je nyní dolní okraj obrazovky 
-		#self.scale = scale
 		self.pref = pygame.Vector2(0,-1)
 	def mpos(self) :
 		self.pref += pygame.Vector2(0,-0.5)
@@ -72,9 +73,9 @@ while running :
 			running = False
 	for i,x in enumerate(mapg.map) :
 		for j,y in enumerate(x) :
-			pygame.draw.rect(screen, hcol[y], (math.floor(6.4*i),math.floor(680-6.4*j),7,7))
+			pygame.draw.rect(screen, hcol[y], (i*const+(res[0]-ds[0]*const)/2,res[1]-j*const-(res[1]-ds[1]*const)/2,math.ceil(const),math.ceil(const)))
 	for x in kapky :
-		if x.x > 199 or x.x < 0 or x.y > 99 or x.y < 0:
+		if x.x > ds[0] or x.x < 0 or x.y > ds[1] or x.y < 0:
 			kapky.remove(x)
 			del x
 			continue
@@ -85,7 +86,7 @@ while running :
 			del x
 			continue
 	if pygame.mouse.get_pressed()[0] and pygame.mouse.get_pos()[1]>40 and pygame.mouse.get_pos()[1]<680 :
-		kapky.append(kapka((math.floor(pygame.mouse.get_pos()[0]/6.4),100-math.floor((pygame.mouse.get_pos()[1]-40)/6.4)), 5))
+		kapky.append(kapka((int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const),int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const))))
 	if pygame.mouse.get_pressed()[1] :
 		kapky = []
 	screen.blit(font.render(str(math.floor(pygame.mouse.get_pos()[0]/6.4)) + "  " + str(100-math.floor((pygame.mouse.get_pos()[1]-40)/6.4)), False,(255, 0,0)), pygame.mouse.get_pos())
