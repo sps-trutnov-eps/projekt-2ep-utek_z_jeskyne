@@ -44,13 +44,11 @@ class kapka :
 		self.pref = pygame.Vector2(0,-1)
 	def mpos(self) :
 		self.pref += pygame.Vector2(0,-0.5)
-		#self.scale *= 1.5
 		m = 0
 		for i in vecs :
 			if vhard(self.x,self.y,self.pref.rotate(m)) > vhard(self.x,self.y,self.pref.rotate(i)) : #5 def r
 				m = i
 		self.pref= self.pref.normalize().rotate(m)
-		#self.scale -= self.scale*m/
 		m=vhard(self.x,self.y,self.pref, hd=False, bid=2)
 		self.x = m[0]
 		self.y = m[1]
@@ -85,7 +83,7 @@ while running :
 			kapky.remove(x)
 			del x
 			continue
-	if pygame.mouse.get_pressed()[0] and pygame.mouse.get_pos()[1]>40 and pygame.mouse.get_pos()[1]<680 :
+	if pygame.mouse.get_pressed()[0] :
 		kapky.append(kapka((int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const),int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const))))
 	if pygame.mouse.get_pressed()[1] :
 		kapky = []
