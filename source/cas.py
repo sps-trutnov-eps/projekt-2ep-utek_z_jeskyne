@@ -27,7 +27,8 @@ class MapGrid():
 
         return new_map_grid
     def setblock(self, pos, bid) :
-        self.map[pos[0]][pos[1]] = bid
+        if pos[0]==abs(pos[0]) and pos[1]==abs(pos[1]) :
+            self.map[pos[0]][pos[1]] = bid
 
 
 
