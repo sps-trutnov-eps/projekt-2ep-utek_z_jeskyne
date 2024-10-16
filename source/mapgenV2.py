@@ -53,6 +53,13 @@ class kapka :
 		m=vhard(self.x,self.y,self.pref, hd=False, bid=2)
 		self.x = m[0]
 		self.y = m[1]
+def savemap(map) :
+	fmap = open("map", "w")
+	for x in map :
+		buffer = ""
+		for y in x :
+			buffer+=y+','
+		fmap.write(buffer+"\n")
 pygame.init()
 kapky = []
 screen = pygame.display.set_mode((1280, 720))
