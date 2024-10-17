@@ -61,7 +61,7 @@ def savemap(map) :
 		fmap.write(buffer+"\n")
 pygame.init()
 kapky = []
-screen = pygame.display.set_mode((1280, 720))
+screen = pygame.display.set_mode(res)
 running = True
 font = pygame.font.SysFont("", 25)
 while running :
