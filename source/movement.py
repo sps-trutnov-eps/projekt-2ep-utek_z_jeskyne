@@ -1,6 +1,6 @@
 from tkinter import Toplevel
 import pygame
-from pygame import key
+from pygame import K_w, key
 import random
 
 pygame.init()
@@ -22,6 +22,8 @@ class character(pygame.sprite.Sprite):
         self.Zet = 1 #pro potreby zmeny Postavy mezi plazenim a stojenim
         self.cooldown = 0   #Cooldown mezi zmenenim stavu (stani/plazeni)
         self.GroundSpeed = 250  #rychlost pohybu normalne
+        self.ClimbSpeed = 100
+        self.IsClimbing = False
 
     def update(self, time_passed, blocks):
         pressed = pygame.key.get_pressed()
@@ -47,21 +49,38 @@ class character(pygame.sprite.Sprite):
         if self.cooldown > 0:
             self.cooldown -= time_passed
 
-        # Horizontal movement
+        # Horizontalni movement
         self.vel.x = 0
-        if pressed[pygame.K_LEFT] or pressed[pygame.K_a]:
+        if pressed[pygame.K_LEFT]:# or pressed[pygame.K_a]:
             self.vel.x -= self.GroundSpeed
-        if pressed[pygame.K_RIGHT] or pressed[pygame.K_d]:
+        if pressed[pygame.K_RIGHT]:# or pressed[pygame.K_d]:
             self.vel.x += self.GroundSpeed
 
-        # Jumping
-        if (pressed[pygame.K_UP] or pressed[pygame.K_w]) and self.OnGround:
-            self.vel.y -= 1135 if self.Zet == 1 else 300
+        # Skakani
+        if pressed[pygame.K_UP] and self.OnGround and not self.IsClimbing:
+            self.vel.y = -1135 if self.Zet == 1 else -300
+            self.OnGround = False  # Immediately set OnGround to False when jumping
 
-        # Apply gravity
-        self.vel.y += 5000 * time_passed
+        if pressed[pygame.K_f] and self.MuzesLezt:
+            self.IsClimbing = True
+        else:
+            self.IsClimbing = False
 
-        # Update position and check collisions
+        if self.IsClimbing:
+            if pressed[pygame.K_UP]:
+                self.vel.y = -self.ClimbSpeed
+            elif pressed[pygame.K_DOWN]:
+                self.vel.y = self.ClimbSpeed
+            else:
+                self.vel.y = 0  # Zustanes na miste pokud se nehejbes
+        elif not self.OnGround:
+            # Gravity (only if not climbing and not on ground)
+            self.vel.y += 5000 * time_passed
+        else:
+            # Na zemi
+            self.vel.y = 0
+
+        # Updejt pozic a check kolizi pro X a Y
         self.pos.x += self.vel.x * time_passed
         self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
         self.check_collisions_x(blocks)
@@ -70,7 +89,7 @@ class character(pygame.sprite.Sprite):
         self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
         self.check_collisions_y(blocks)
 
-        # Screen boundaries
+        # abys nahodou neodesel z obrazovky
         if self.rect.left < 0:
             self.rect.left = 0
             self.pos.x = self.rect.centerx
@@ -81,28 +100,35 @@ class character(pygame.sprite.Sprite):
         return pressed
 
     def check_collisions_x(self, blocks):
+        self.MuzesLezt = False
         for block in blocks:
             if self.rect.colliderect(block.rect):
-                if self.vel.x > 0:  # Moving right
+                self.MuzesLezt = True
+                if self.vel.x > 0:  # Pohyb doprava
                     self.rect.right = block.rect.left
-                elif self.vel.x < 0:  # Moving left
+                elif self.vel.x < 0:  # Pohyb doleva
                     self.rect.left = block.rect.right
-                self.pos.x = self.rect.midbottom[0]
+                self.pos.x = self.rect.centerx
+                break  # Brejk kdyz je nalezena kolize
 
     def check_collisions_y(self, blocks):
-        self.OnGround = False
-        for block in blocks:
-            if self.rect.colliderect(block.rect):
-                if self.vel.y > 0:  # Falling
-                    self.rect.bottom = block.rect.top
-                    self.vel.y = 0
-                    self.OnGround = True
-                elif self.vel.y < 0:  # Jumping
-                    self.rect.top = block.rect.bottom
-                    self.vel.y = 0
-                self.pos.y = self.rect.midbottom[1]
+            self.OnGround = False
+            for block in blocks:
+                if self.rect.colliderect(block.rect):
+                    if self.vel.y > 0:  # Falling
+                        self.rect.bottom = block.rect.top
+                        self.vel.y = 0
+                        self.OnGround = True
+                    elif self.vel.y < 0:  # Jumping
+                        self.rect.top = block.rect.bottom
+                        self.vel.y = 0
+                    self.pos.y = self.rect.bottom
+                    break
 
-Hrac = character(100, 700, 100, OnGround = False, CharacterSirka = 50, CharacterVyska = 150)
+            if self.IsClimbing and not self.MuzesLezt:
+                self.IsClimbing = False
+
+Hrac = character(100, 500, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
 
 HracSprite = pygame.sprite.GroupSingle()
 HracSprite.add(Hrac)
@@ -120,7 +146,8 @@ class environmentblock(pygame.sprite.Sprite):
 
 
 AllCaveSprites = pygame.sprite.Group()
-Bloky = (environmentblock(0, 710, 1280, 50)) #podlaha
+Bloky = (environmentblock(0, 710, 1280, 50),
+         environmentblock(0,0, 10, 720)) #podlaha
 for i in range(10):
     x = (environmentblock((random.randint(0,1200)), (random.randint(500,700)), 50, 50))
     AllCaveSprites.add(x)
@@ -143,7 +170,7 @@ class Enemy(pygame.sprite.Sprite):
         self.CanCPlayer = False
 
     def update(self, time_passed, blocks):
-        self.move.y += 5000 * time_passed  # Gravity
+        self.move.y += 5000 * time_passed  #Gravitace
 
         # Update position and check collisions
         self.pos.x += self.move.x * time_passed
@@ -185,8 +212,8 @@ class Enemy(pygame.sprite.Sprite):
                 self.pos.y = self.rect.midbottom[1]
 
     def patrol(self, Hrac, screen, AllCaveSprites):
-            player_bottom = (Hrac.rect.center[0], Hrac.rect.bottom)
-            player_top = (Hrac.rect.center[0], Hrac.rect.top)
+            player_bottom = (Hrac.rect.center[0], Hrac.rect.bottom - 10)
+            player_top = (Hrac.rect.center[0], Hrac.rect.top + 10)
             enemy_top = (self.rect.center[0], self.rect.top + 20)
             
             self.CanCPlayer_Top = True
@@ -200,7 +227,7 @@ class Enemy(pygame.sprite.Sprite):
                 self.Doleva = True
                 self.Doprava = False
 
-
+            #checkujes dvakrat, protoze jednou je to pro vrchol hrace a jednou pro spodek hrace
             for block in AllCaveSprites:
                 if block.rect.clipline(player_bottom, enemy_top):
                     self.CanCPlayer_Center = False
@@ -215,11 +242,11 @@ class Enemy(pygame.sprite.Sprite):
             if self.CanCPlayer_Center:
                 pygame.draw.line(screen, RED, player_bottom, enemy_top, 5)
             else:
-                pygame.draw.line(screen, BLUE, player_bottom, enemy_top, 5)
+                pygame.draw.line(screen, GREEN, player_bottom, enemy_top, 5)
             if self.CanCPlayer_Top:
                 pygame.draw.line(screen, RED, player_top, enemy_top, 5)
             else:
-                pygame.draw.line(screen, BLUE, player_top, enemy_top, 5)
+                pygame.draw.line(screen, GREEN, player_top, enemy_top, 5)
 
             if self.CanCPlayer_Center or self.CanCPlayer_Top:
                 pass
