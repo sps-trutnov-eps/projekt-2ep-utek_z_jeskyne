@@ -2,6 +2,7 @@ from tkinter import Toplevel
 import pygame
 from pygame import K_w, key
 import random
+from pygame import time
 
 pygame.init()
 screen = pygame.display.set_mode((1280, 720))
@@ -23,6 +24,7 @@ class character(pygame.sprite.Sprite):
         self.cooldown = 0   #Cooldown mezi zmenenim stavu (stani/plazeni)
         self.GroundSpeed = 250  #rychlost pohybu normalne
         self.ClimbSpeed = 100
+        self.IsCrawling = False
         self.IsClimbing = False
 
     def update(self, time_passed, blocks):
@@ -112,23 +114,30 @@ class character(pygame.sprite.Sprite):
                 break  # Brejk kdyz je nalezena kolize
 
     def check_collisions_y(self, blocks):
-            self.OnGround = False
-            for block in blocks:
-                if self.rect.colliderect(block.rect):
-                    if self.vel.y > 0:  # Falling
-                        self.rect.bottom = block.rect.top
-                        self.vel.y = 0
-                        self.OnGround = True
-                    elif self.vel.y < 0:  # Jumping
-                        self.rect.top = block.rect.bottom
-                        self.vel.y = 0
-                    self.pos.y = self.rect.bottom
-                    break
+        self.OnGround = False
+        for block in blocks:
+            if self.rect.colliderect(block.rect):
+                if self.vel.y > 0:  # Falling
+                    self.rect.bottom = block.rect.top
+                    self.vel.y = 0
+                    self.OnGround = True
+                elif self.vel.y < 0:  # Jumping
+                    self.rect.top = block.rect.bottom
+                    self.vel.y = 0
+                self.pos.y = self.rect.bottom
+                break
 
-            if self.IsClimbing and not self.MuzesLezt:
-                self.IsClimbing = False
+        if self.IsClimbing and not self.MuzesLezt:
+            self.IsClimbing = False
 
-Hrac = character(100, 500, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
+    def camera_movement(self):
+        TopLine = pygame.draw.line(screen, GREEN,(0, 200),(1280, 200), 5)
+        BottomLine = pygame.draw.line(screen, GREEN,(0, 600),(1280, 600), 5)
+        LeftLine = pygame.draw.line(screen, GREEN,(400, 0),(400, 720), 5)
+        RightLine = pygame.draw.line(screen, GREEN,(880, 0),(880, 720), 5)
+
+
+Hrac = character(640, 360, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
 
 HracSprite = pygame.sprite.GroupSingle()
 HracSprite.add(Hrac)
@@ -146,10 +155,10 @@ class environmentblock(pygame.sprite.Sprite):
 
 
 AllCaveSprites = pygame.sprite.Group()
-Bloky = (environmentblock(0, 710, 1280, 50),
-         environmentblock(0,0, 10, 720)) #podlaha
-for i in range(10):
-    x = (environmentblock((random.randint(0,1200)), (random.randint(500,700)), 50, 50))
+Bloky = (environmentblock(0, 540, 1280, 50), #podlaha
+         environmentblock(0,0, 10, 720)) #lezecka stena
+for i in range(18):
+    x = (environmentblock((random.randint(0,1230)), (random.randint(400,550)), 50, 50))
     AllCaveSprites.add(x)
 AllCaveSprites.add(Bloky)
 
@@ -258,9 +267,34 @@ class Enemy(pygame.sprite.Sprite):
         if kolizeCheck:
             print('ted ma hrac umrit')
 
-Nepritel = Enemy(1000, 500, True)
+class GameClock:
+    def __init__(self, target_fps=60):
+        self.clock = pygame.time.Clock()
+        self.target_fps = target_fps
+        self.last_time = time.get_ticks()
+        self.fixed_delta = 1.0 / target_fps
+        
+    def tick(self):
+        """Returns a fixed delta time regardless of actual frame time"""
+        current_time = time.get_ticks()
+        delta = (current_time - self.last_time) / 1000.0
+        self.last_time = current_time
+        
+        # Cap delta time to prevent huge jumps
+        if delta > 0.25:  # Cap at 1/4 second
+            delta = self.fixed_delta
+            
+        self.clock.tick(self.target_fps)
+        return self.fixed_delta  # Return fixed timestep instead of actual delta
+
+
+Nepritel = Enemy(1000, 400, True)
 EnemySprite = pygame.sprite.Group()
 EnemySprite.add(Nepritel)
+
+game_clock = GameClock(60)
+
+
 
 while running:
     for event in pygame.event.get():
@@ -268,10 +302,11 @@ while running:
             running = False
 
     screen.fill((0,0,0))
-    time_passed = clock.tick(60) / 1000.0
+    delta_time = game_clock.tick()
 
-    Hrac.update(time_passed, AllCaveSprites)
-    Nepritel.update(time_passed, AllCaveSprites)
+    Hrac.update(delta_time, AllCaveSprites)
+    Hrac.camera_movement()
+    Nepritel.update(delta_time, AllCaveSprites)
     Nepritel.patrol(Hrac, screen, AllCaveSprites)
     Nepritel.killCheck()
 
