@@ -76,10 +76,9 @@ class character(pygame.sprite.Sprite):
             else:
                 self.vel.y = 0  # Zustanes na miste pokud se nehejbes
         elif not self.OnGround:
-            # Gravity (only if not climbing and not on ground)
+            # Gravitace ale jen pokud nelezes a nejses na zemi
             self.vel.y += 5000 * time_passed
         else:
-            # Na zemi
             self.vel.y = 0
 
         # Updejt pozic a check kolizi pro X a Y
@@ -130,17 +129,47 @@ class character(pygame.sprite.Sprite):
         if self.IsClimbing and not self.MuzesLezt:
             self.IsClimbing = False
 
-    def camera_movement(self):
-        TopLine = pygame.draw.line(screen, GREEN,(0, 200),(1280, 200), 5)
-        BottomLine = pygame.draw.line(screen, GREEN,(0, 600),(1280, 600), 5)
-        LeftLine = pygame.draw.line(screen, GREEN,(400, 0),(400, 720), 5)
-        RightLine = pygame.draw.line(screen, GREEN,(880, 0),(880, 720), 5)
+class Camera:
+    def __init__(self, target, screen_width, screen_height):
+        self.target = target  # Tohle je sledovanej objekt
+        self.offset = pygame.math.Vector2(0, 0)
+        self.SCREEN_WIDTH = 1280
+        self.SCREEN_HEIGHT = 720
+        
+        #Nastaveni kamery
+        self.LERP_SPEED = 0.1
+        self.DEAD_ZONE_X = 120
+        self.DEAD_ZONE_Y = 80
+        self.bounds = None
 
+    def lerp(self, start, end, amount):
+        #pocita ten smoothnes kamery
+        return start + (end - start) * amount
 
-Hrac = character(640, 360, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
+    def set_bounds(self, level_width, level_height):
+        #Okraje mapy
+        self.bounds = pygame.Rect(0, 0, level_width, level_height)
 
-HracSprite = pygame.sprite.GroupSingle()
-HracSprite.add(Hrac)
+    def update(self):
+        #Updejtuje camera posXY
+        #Vypocitej target pos jako centerXaY hrace
+        target_x = self.target.rect.centerx - self.SCREEN_WIDTH/2
+        target_y = self.target.rect.centery - self.SCREEN_HEIGHT/2
+
+        # Tohle dela smoothing
+        self.offset.x = self.lerp(self.offset.x, target_x, self.LERP_SPEED)
+        self.offset.y = self.lerp(self.offset.y, target_y, self.LERP_SPEED)
+
+        #Aplikuje okraje
+        if self.bounds:
+            self.offset.x = max(0, min(self.offset.x, 
+                                     self.bounds.width - self.SCREEN_WIDTH))
+            self.offset.y = max(0, min(self.offset.y, 
+                                     self.bounds.height - self.SCREEN_HEIGHT))
+
+    def apply(self, entity):
+        #aplikuje ofset
+        return entity.rect.copy().topleft - self.offset
 
 class environmentblock(pygame.sprite.Sprite):
     def __init__(self, x, y, sirka, vyska):
@@ -152,19 +181,6 @@ class environmentblock(pygame.sprite.Sprite):
         self.image = pygame.Surface((self.sirka, self.vyska))
         self.image.fill((255, 255, 255)) 
         self.rect = self.image.get_rect(topleft=(round(self.pos.x), round(self.pos.y)))
-
-
-AllCaveSprites = pygame.sprite.Group()
-Bloky = (environmentblock(0, 540, 1280, 50), #podlaha
-         environmentblock(0,0, 10, 720)) #lezecka stena
-for i in range(18):
-    x = (environmentblock((random.randint(0,1230)), (random.randint(400,550)), 50, 50))
-    AllCaveSprites.add(x)
-AllCaveSprites.add(Bloky)
-
-OnTopBlock = True #jak vim ze je postava na hore na bloku a nemam aplikovat teleport do strany
-jumping = False
-
 
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y, OnGround):
@@ -267,7 +283,7 @@ class Enemy(pygame.sprite.Sprite):
         if kolizeCheck:
             print('ted ma hrac umrit')
 
-class GameClock:
+class GameClock: #tohle je lepsi pocitadlo aby to fungovalo i kdyz hejbes s oknem
     def __init__(self, target_fps=60):
         self.clock = pygame.time.Clock()
         self.target_fps = target_fps
@@ -280,13 +296,32 @@ class GameClock:
         delta = (current_time - self.last_time) / 1000.0
         self.last_time = current_time
         
-        # Cap delta time to prevent huge jumps
+        # maximalni cap  na 0.25 funguje asi nejlip
         if delta > 0.25:  # Cap at 1/4 second
             delta = self.fixed_delta
             
         self.clock.tick(self.target_fps)
         return self.fixed_delta  # Return fixed timestep instead of actual delta
 
+
+Hrac = character(640, 360, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
+
+HracSprite = pygame.sprite.GroupSingle()
+HracSprite.add(Hrac)
+#Kamerovy inicializace
+camera = Camera(Hrac, 1280, 720)  #Hrac jako cil
+camera.set_bounds(level_width=2000, level_height=1000)  #Tady udelas level size (asi muzem pak smazat ale muze se hodit ig, uprime ted uplne nevim a je asi 10 hodin)
+
+AllCaveSprites = pygame.sprite.Group()
+Bloky = (environmentblock(0, 540, 1280, 50), #podlaha
+         environmentblock(0,0, 10, 720)) #lezecka stena
+for i in range(18):
+    x = (environmentblock((random.randint(0,1230)), (random.randint(400,550)), 50, 50))
+    AllCaveSprites.add(x)
+AllCaveSprites.add(Bloky)
+
+OnTopBlock = True #jak vim ze je postava na hore na bloku a nemam aplikovat teleport do strany
+jumping = False
 
 Nepritel = Enemy(1000, 400, True)
 EnemySprite = pygame.sprite.Group()
@@ -295,24 +330,32 @@ EnemySprite.add(Nepritel)
 game_clock = GameClock(60)
 
 
-
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
-    screen.fill((0,0,0))
+    #Cas, pro pocitani gravitace 
     delta_time = game_clock.tick()
 
+
+    camera.update()
     Hrac.update(delta_time, AllCaveSprites)
-    Hrac.camera_movement()
     Nepritel.update(delta_time, AllCaveSprites)
     Nepritel.patrol(Hrac, screen, AllCaveSprites)
     Nepritel.killCheck()
 
-    HracSprite.draw(screen)
-    EnemySprite.draw(screen)
-    AllCaveSprites.draw(screen)
+    screen.fill((0,0,0))
+
+    #vykreslovani s offsetem
+    for sprite in AllCaveSprites:
+        pos = camera.apply(sprite)
+        screen.blit(sprite.image, pos)
+    
+    # Vykresleni hrace a enemy s offsetem
+    screen.blit(Hrac.image, camera.apply(Hrac))
+    screen.blit(Nepritel.image, camera.apply(Nepritel))
+
     pygame.display.flip()
 
 pygame.quit()
