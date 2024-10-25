@@ -1,4 +1,5 @@
 import pygame
+from movement import main, COLORS
 
 pygame.init()
 screen = pygame.display.set_mode((1280, 720))
@@ -12,6 +13,7 @@ while running:
             
     screen.fill((0,0,0))
 
+    main()
 
     pygame.display.flip()
 
