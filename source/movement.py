@@ -361,10 +361,10 @@ def CreateMap():
     # Ground and climbing wall
     blocks = (
         environmentblock(0, 540, 2280, 50),  # podlaha
-        environmentblock(0, 0, 10, 720)      # lezecka stìna nalevo (testovaci)
+        environmentblock(0, 0, 10, 720)      # lezecka stï¿½na nalevo (testovaci)
     )
     
-    #prozatím random bloky
+    #prozatï¿½m random bloky
     for _ in range(40):
         x = environmentblock(random.randint(0, 2230),random.randint(300, 490), 50, 50)
         AllCaveSprites.add(x)

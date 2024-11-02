@@ -2,8 +2,8 @@
 import pygame
 import cas
 #import threading
-ds = (150,200)
-res = (1280,720)
+ds = (100,250)
+res = (720,900)
 const = min(res[0]/ds[0],res[1]/ds[1])
 mapg = cas.MapGrid(ds)
 mapg.map = mapg._generate_outside_terrain(mapg.map, 4) # zatím jen 0 a 1, mají přidružené k tomu ještě tvrdost kvůli budoucím materiálům
@@ -43,7 +43,7 @@ class kapka :
 		self.y = pos[1] # Změna!! y=0 je nyní dolní okraj obrazovky 
 		self.pref = pygame.Vector2(0,-1)
 	def mpos(self) :
-		self.pref += pygame.Vector2(0,-0.5)
+		self.pref += pygame.Vector2(0,-0.7)
 		m = 0
 		for i in vecs :
 			if vhard(self.x,self.y,self.pref.rotate(m)) > vhard(self.x,self.y,self.pref.rotate(i)) : #5 def r
@@ -87,6 +87,7 @@ while running :
 		kapky.append(kapka((int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const),int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const))))
 	if pygame.mouse.get_pressed()[1] :
 		kapky = []
-	screen.blit(font.render(str(int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const)) + "  " + str(int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const)), False,(255, 0,0)), pygame.mouse.get_pos())
+	screen.blit(font.render(str(len(kapky)), False,(255, 0,0)), pygame.mouse.get_pos()) 
+	#str(int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const)) + "  " + str(int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const)) ##Coords na debug
 	pygame.display.flip()	
 pygame.quit()
