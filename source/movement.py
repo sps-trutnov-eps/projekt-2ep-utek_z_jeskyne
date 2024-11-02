@@ -80,7 +80,7 @@ class character(pygame.sprite.Sprite):
                 break
             else:
                 print("ted se MUZES postavit")
-        if pressed[pygame.K_RCTRL]:
+        if pressed[pygame.K_LCTRL]:
             if self.cooldown <= 0:
                 if not self.IsCrawling:  #Zmena na plazeni
                     self.CharacterSirka, self.CharacterVyska = 150, 50
