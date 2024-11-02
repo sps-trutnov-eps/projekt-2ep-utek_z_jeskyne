@@ -374,8 +374,8 @@ def CreateMap():
     
     for i,x in enumerate(mapp) :
         for j,y in enumerate(x) :
-            if y != 2 :
-                AllCaveSprites.add(environmentblock(i*75,j*75,75,75))
+            if y!='2' :
+                AllCaveSprites.add(environmentblock(j*75,i*75,75,75))
     
     #AllCaveSprites.add(blocks)
     return AllCaveSprites
