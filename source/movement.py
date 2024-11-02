@@ -20,7 +20,7 @@ def initGame():
     
     # Create player
     game_state.player = character(
-        640, 360, 100,
+        0, 100, 100,
         OnGround=True,
         CharacterSirka=50,
         CharacterVyska=150
