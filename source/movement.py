@@ -358,18 +358,26 @@ def initPygame():
 
 def CreateMap():
     AllCaveSprites = pygame.sprite.Group()
+    
+    mapp = open("map", "r")
+    
     # Ground and climbing wall
-    blocks = (
-        environmentblock(0, 540, 2280, 50),  # podlaha
-        environmentblock(0, 0, 10, 720)      # lezecka st�na nalevo (testovaci)
-    )
+    # blocks = (
+    #     environmentblock(0, 540, 2280, 50),  # podlaha
+    #     environmentblock(0, 0, 10, 720)      # lezecka st�na nalevo (testovaci)
+    # )
     
     #prozat�m random bloky
-    for _ in range(40):
-        x = environmentblock(random.randint(0, 2230),random.randint(300, 490), 50, 50)
-        AllCaveSprites.add(x)
+    # for _ in range(40):
+    #     x = environmentblock(random.randint(0, 2230),random.randint(300, 490), 50, 50)
+    #     AllCaveSprites.add(x)
     
-    AllCaveSprites.add(blocks)
+    for i,x in enumerate(mapp) :
+        for j,y in enumerate(x) :
+            if y != 2 :
+                AllCaveSprites.add(environmentblock(i*75,j*75,75,75))
+    
+    #AllCaveSprites.add(blocks)
     return AllCaveSprites
 
 def game_loop(game_state):

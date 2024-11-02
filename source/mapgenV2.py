@@ -2,7 +2,7 @@
 import pygame
 import cas
 #import threading
-ds = (100,250)
+ds = (50,50)
 res = (720,900)
 const = min(res[0]/ds[0],res[1]/ds[1])
 mapg = cas.MapGrid(ds)
@@ -57,7 +57,7 @@ def savemap(map) :
 	for x in map :
 		buffer = ""
 		for y in x :
-			buffer+=y+','
+			buffer+=str(y) # kašleme na +',' 
 		fmap.write(buffer+"\n")
 pygame.init()
 kapky = []
@@ -90,4 +90,6 @@ while running :
 	screen.blit(font.render(str(len(kapky)), False,(255, 0,0)), pygame.mouse.get_pos()) 
 	#str(int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const)) + "  " + str(int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const)) ##Coords na debug
 	pygame.display.flip()	
+if input("Save? Y/N").upper() == 'Y' :
+	savemap(mapg.map)
 pygame.quit()
