@@ -65,6 +65,9 @@ class character(pygame.sprite.Sprite):
         self.IsCrawling = False
         self.IsCrawling = False
         self.IsClimbing = False
+        self.original_image = pygame.image.load("KindaCamo.png").convert_alpha()
+        self.image = self.original_image
+        self.DivaSeDoprava = True
 
     def update(self, time_passed, blocks):
         self.CanStandUp = True
@@ -72,14 +75,10 @@ class character(pygame.sprite.Sprite):
 
         SpaceCheckHeight = self.CharacterVyska if not self.IsCrawling else 150 
         SpaceCheckerRect = pygame.Rect(self.rect.x, self.rect.y - (SpaceCheckHeight - self.CharacterVyska), self.CharacterSirka,SpaceCheckHeight - self.CharacterVyska)
-        
         for block in blocks:
             if SpaceCheckerRect.colliderect(block.rect):
                 self.CanStandUp = False
-                print("ted se nemuzes postavit")
                 break
-            else:
-                print("ted se MUZES postavit")
         if pressed[pygame.K_LCTRL]:
             if self.cooldown <= 0:
                 if not self.IsCrawling:  #Zmena na plazeni
@@ -109,9 +108,13 @@ class character(pygame.sprite.Sprite):
         # Horizontalni movement
         self.vel.x = 0
         if pressed[pygame.K_LEFT]:# or pressed[pygame.K_a]:
+            self.DivaSeDoprava = False
             self.vel.x -= self.GroundSpeed
+            self.image = pygame.transform.flip(self.original_image, True, False)
         if pressed[pygame.K_RIGHT]:# or pressed[pygame.K_d]:
+            self.DivaSeDoprava = True
             self.vel.x += self.GroundSpeed
+            self.image = self.original_image
 
         # Skakani
         if pressed[pygame.K_UP] and self.OnGround and not self.IsClimbing:
