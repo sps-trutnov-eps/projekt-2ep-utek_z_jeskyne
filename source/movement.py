@@ -37,7 +37,7 @@ def initGame():
     game_state.AllCaveSprites = CreateMap()
     
     #Enemy init, pozdejc jich asi bude vic
-    enemy = Enemy(1000, 400, True)
+    enemy = Enemy(0, 0, True)
     game_state.enemy_sprite = pygame.sprite.Group()
     game_state.enemy_sprite.add(enemy)
     
@@ -237,18 +237,28 @@ class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y, OnGround):
         super().__init__()
         self.pos = pygame.math.Vector2(x, y)
-        self.move = pygame.math.Vector2(100, 0)  # Initial velocity
+        self.move = pygame.math.Vector2(100, 0)  #pocatecni rychlost
         self.OnGround = OnGround
-        self.image = pygame.Surface((80, 200))
-        self.image.fill((200, 0, 200)) 
+        self.image = pygame.Surface((150, 50))
+        self.image.fill((200, 0, 200))
         self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
         self.Speed = 100  #Rychlost pohybu
         self.CanCPlayer = False
+        self.DivaSeDoprava = True
+
+        #puvodni obrazek
+        self.OriginalImage = pygame.image.load("Enemy01.png").convert_alpha()
+        #load textury a resize pro lezeni a stani
+        self.StandingImage = pygame.transform.scale(self.OriginalImage, (300, 100))
+
+        #Toto je pocatecni image
+        self.image = self.StandingImage
+        self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
 
     def update(self, time_passed, blocks):
         self.move.y += 5000 * time_passed  #Gravitace
 
-        # Update position and check collisions
+        # Update kolizi a check pozice
         self.pos.x += self.move.x * time_passed
         self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
         self.check_collisions_x(blocks)
@@ -257,32 +267,37 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
         self.check_collisions_y(blocks)
 
-        # Screen boundaries
-        if self.rect.left < 0 or self.rect.right > 1280:
-            self.move.x *= -1
-        self.rect.clamp_ip(screen.get_rect())
-        self.pos.x, self.pos.y = self.rect.midbottom
+        if self.move.x > 0:
+            if self.DivaSeDoprava: #pokud se divas doprava tak se otoci image
+                CurrentImage = self.StandingImage
+                self.image = pygame.transform.flip(CurrentImage, True, False) #otoceni image (prvni bool je osa X, druhy Y)
+                self.DivaSeDoprava = False #uz se nediva doprava
+        elif self.move.x <= 0:
+            if not self.DivaSeDoprava: #stejny co vyse
+                CurrentImage = self.StandingImage
+                self.image = CurrentImage #tady se ale pouzije origo image
+                self.DivaSeDoprava = True
 
     def check_collisions_x(self, blocks):
         for block in blocks:
             if self.rect.colliderect(block.rect):
-                if self.move.x > 0:  # Moving right
+                if self.move.x > 0:  # pohybuje se doprava
                     self.rect.right = block.rect.left
-                elif self.move.x < 0:  # Moving left
+                elif self.move.x < 0:  # pohyb doleva
                     self.rect.left = block.rect.right
                 self.move.y -= 1000
-                self.move.x *= -1  # Reverse direction
+                self.move.x *= -1  # obrati se
                 self.pos.x = self.rect.midbottom[0]
 
 
     def check_collisions_y(self, blocks):
         for block in blocks:
             if self.rect.colliderect(block.rect):
-                if self.move.y > 0:  # Falling
+                if self.move.y > 0:  # padani
                     self.rect.bottom = block.rect.top
                     self.move.y = 0
                     self.OnGround = True
-                elif self.move.y < 0:  # Jumping
+                elif self.move.y < 0:  # skakani
                     self.rect.top = block.rect.bottom
                     self.move.y = 0
                 self.pos.y = self.rect.midbottom[1]
@@ -327,7 +342,6 @@ class Enemy(pygame.sprite.Sprite):
             if self.CanCPlayer_Center or self.CanCPlayer_Top:
                 pass
                 # self.hunt()
-
 
     def killCheck(self, game_state):
         kolizeCheck = pygame.sprite.spritecollide(game_state.HracSprite.sprite, game_state.enemy_sprite, False)
