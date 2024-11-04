@@ -55,9 +55,19 @@ class character(pygame.sprite.Sprite):
         self.OnGround = OnGround
         self.CharacterSirka = CharacterSirka
         self.CharacterVyska = CharacterVyska
-        self.image = pygame.Surface((self.CharacterSirka, self.CharacterVyska))
-        self.image.fill((255, 0, 0)) 
+
+        #puvodni obrazek
+        self.OriginalImage = pygame.image.load("Character01.png").convert_alpha()
+        #load textury a resize pro lezeni a stani
+        self.StandingImage = pygame.transform.scale(self.OriginalImage, (70, 150))
+        self.CrawlingImage = pygame.transform.rotate(self.OriginalImage, -90)
+        self.CrawlingImage = pygame.transform.scale(self.CrawlingImage, (150, 70))
+
+        #Toto je zacatecni image
+        self.image = self.StandingImage
         self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
+
+        #staty a stavy
         self.cooldown = 0   #Cooldown mezi zmenenim stavu (stani/plazeni)
         self.GroundSpeed = 250  #rychlost pohybu normalne
         self.ClimbSpeed = 100
@@ -65,41 +75,40 @@ class character(pygame.sprite.Sprite):
         self.IsCrawling = False
         self.IsCrawling = False
         self.IsClimbing = False
-        self.original_image = pygame.image.load("KindaCamo.png").convert_alpha()
-        self.image = self.original_image
         self.DivaSeDoprava = True
 
     def update(self, time_passed, blocks):
         self.CanStandUp = True
         pressed = pygame.key.get_pressed()
 
+        #tohle je blok nad hracem, pres kterej se kontroluje jestli se muze postavit
         SpaceCheckHeight = self.CharacterVyska if not self.IsCrawling else 150 
         SpaceCheckerRect = pygame.Rect(self.rect.x, self.rect.y - (SpaceCheckHeight - self.CharacterVyska), self.CharacterSirka,SpaceCheckHeight - self.CharacterVyska)
+        
         for block in blocks:
             if SpaceCheckerRect.colliderect(block.rect):
                 self.CanStandUp = False
                 break
-        if pressed[pygame.K_LCTRL]:
-            if self.cooldown <= 0:
-                if not self.IsCrawling:  #Zmena na plazeni
-                    self.CharacterSirka, self.CharacterVyska = 150, 50
-                    self.GroundSpeed = 50
-                    self.IsCrawling = True
+        #Tohle handeluje zmenu mezi stanim a plazenim i s texturama
+        if pressed[pygame.K_LCTRL] and self.cooldown <= 0:
+            if not self.IsCrawling:  #Zmeni se na plazeni
+                self.CharacterSirka, self.CharacterVyska = 150, 50
+                self.GroundSpeed = 70
+                self.IsCrawling = True
+                #Textura handeling
+                self.image = self.CrawlingImage #nastavi image na resizenuty imagee
+                self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y))) #znovu nastavi pozici aby nedoslo k desyncu
+
                 
-                    self.image = pygame.Surface((self.CharacterSirka, self.CharacterVyska))
-                    self.image.fill((255, 0, 0))
-                    self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y)))
-                
-                elif self.IsCrawling and self.CanStandUp:  # Player wants to stand and has space
-                    self.CharacterSirka, self.CharacterVyska = 50, 150
-                    self.GroundSpeed = 250
-                    self.IsCrawling = False
-                
-                    self.image = pygame.Surface((self.CharacterSirka, self.CharacterVyska))
-                    self.image.fill((255, 0, 0))
-                    self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y)))
+            elif self.IsCrawling and self.CanStandUp:  #Zmena na postaveni, pokud ma nad sebou misto
+                self.CharacterSirka, self.CharacterVyska = 50, 150
+                self.GroundSpeed = 250
+                self.IsCrawling = False
+                #Textura handeling, stejne jako vyse
+                self.image = self.StandingImage
+                self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y)))
             
-                self.cooldown = 0.2
+            self.cooldown = 0.2
     
         if self.cooldown > 0:
             self.cooldown -= time_passed
@@ -108,24 +117,28 @@ class character(pygame.sprite.Sprite):
         # Horizontalni movement
         self.vel.x = 0
         if pressed[pygame.K_LEFT]:# or pressed[pygame.K_a]:
-            self.DivaSeDoprava = False
             self.vel.x -= self.GroundSpeed
-            self.image = pygame.transform.flip(self.original_image, True, False)
+            if self.DivaSeDoprava: #pokud se divas doprava tak se otoci image
+                CurrentImage = self.StandingImage if not self.IsCrawling else self.CrawlingImage #check jestli ma byt postava na vysku nebo sirku
+                self.image = pygame.transform.flip(CurrentImage, True, False) #otoceni image (prvni bool je osa X, druhy Y)
+                self.DivaSeDoprava = False #uz se nediva doprava
         if pressed[pygame.K_RIGHT]:# or pressed[pygame.K_d]:
-            self.DivaSeDoprava = True
             self.vel.x += self.GroundSpeed
-            self.image = self.original_image
+            if not self.DivaSeDoprava: #stejny co vyse
+                CurrentImage = self.StandingImage if not self.IsCrawling else self.CrawlingImage
+                self.image = CurrentImage #tady se ale pouzije origo image
+                self.DivaSeDoprava = True
 
         # Skakani
         if pressed[pygame.K_UP] and self.OnGround and not self.IsClimbing:
-            self.vel.y = -1135 if not self.IsCrawling else -300
-            self.OnGround = False  # Immediately set OnGround to False when jumping
+            self.vel.y = -1135 if not self.IsCrawling else -300 #tady nevim, asi odstranit skakani na zemi uplne? Novy bool - CanJump
+            self.OnGround = False  #Nastavi okamzite ze nejsi na zemi
 
+        #lezemi
         if pressed[pygame.K_f] and self.MuzesLezt:
             self.IsClimbing = True
         else:
             self.IsClimbing = False
-
         if self.IsClimbing:
             if pressed[pygame.K_UP]:
                 self.vel.y = -self.ClimbSpeed
@@ -148,7 +161,7 @@ class character(pygame.sprite.Sprite):
         self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
         self.check_collisions_y(blocks)
 
-        return pressed
+        #return pressed
 
     def check_collisions_x(self, blocks):
         self.MuzesLezt = False
