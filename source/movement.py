@@ -91,7 +91,9 @@ class character(pygame.sprite.Sprite):
                 break
         #Tohle handeluje zmenu mezi stanim a plazenim i s texturama
         if pressed[pygame.K_LCTRL] and self.cooldown <= 0:
-            if not self.IsCrawling:  #Zmeni se na plazeni
+            if self.cooldown > 0:
+                self.cooldown -= time_passed
+            elif not self.IsCrawling:  #Zmeni se na plazeni
                 self.CharacterSirka, self.CharacterVyska = 150, 50
                 self.GroundSpeed = 70
                 self.IsCrawling = True
@@ -110,8 +112,7 @@ class character(pygame.sprite.Sprite):
             
             self.cooldown = 0.2
     
-        if self.cooldown > 0:
-            self.cooldown -= time_passed
+
 
 
         # Horizontalni movement
@@ -437,7 +438,8 @@ def render_game(game_state):
     #Vykresleni bloku 
     for sprite in game_state.AllCaveSprites:
         pos = game_state.camera.apply(sprite)
-        game_state.screen.blit(sprite.image, pos)
+        if pos[0] > -75 and pos[0]<1280 and pos[1]>-75 and pos[1] <720 :
+            game_state.screen.blit(sprite.image, pos)
     
     #Vykresleni hrace a enemy
     player = game_state.player
