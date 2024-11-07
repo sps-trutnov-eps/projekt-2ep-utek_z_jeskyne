@@ -91,9 +91,7 @@ class character(pygame.sprite.Sprite):
                 break
         #Tohle handeluje zmenu mezi stanim a plazenim i s texturama
         if pressed[pygame.K_LCTRL] and self.cooldown <= 0:
-            if self.cooldown > 0:
-                self.cooldown -= time_passed
-            elif not self.IsCrawling:  #Zmeni se na plazeni
+            if not self.IsCrawling:  #Zmeni se na plazeni
                 self.CharacterSirka, self.CharacterVyska = 150, 50
                 self.GroundSpeed = 70
                 self.IsCrawling = True
@@ -109,9 +107,9 @@ class character(pygame.sprite.Sprite):
                 #Textura handeling, stejne jako vyse
                 self.image = self.StandingImage
                 self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y)))
-            
             self.cooldown = 0.2
-    
+        if self.cooldown > 0:
+            self.cooldown -= time_passed 
 
 
 
