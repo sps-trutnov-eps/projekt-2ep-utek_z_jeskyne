@@ -1,6 +1,6 @@
 import pygame
-from pygame import K_w, key, time
-import random
+from pygame import time
+from GameOver import game_over_screen
 #from tkinter import Toplevel
 
 screen = pygame.display.set_mode((1280, 720))
@@ -15,16 +15,11 @@ COLORS = {
 def initGame():
     game_state = GameState()
     
-    # Initialize basic Pygame
+    # init Pygame
     game_state.screen, game_state.clock = initPygame()
     
-    # Create player
-    game_state.player = character(
-        0, 100, 100,
-        OnGround=True,
-        CharacterSirka=50,
-        CharacterVyska=150
-    )
+    # HRAC vytvoreni
+    game_state.player = character(1000, 100, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
     
     #Sprite Hrace
     game_state.HracSprite = pygame.sprite.GroupSingle()
@@ -36,8 +31,8 @@ def initGame():
     #Postav mapu, upec chleba
     game_state.AllCaveSprites = CreateMap()
     
-    #Enemy init, pozdejc jich asi bude vic
-    enemy = Enemy(0, 0, True)
+    #Enemy init, pozdejc jich mozna bude vic
+    enemy = Enemy(300, 0, True)
     game_state.enemy_sprite = pygame.sprite.Group()
     game_state.enemy_sprite.add(enemy)
     
@@ -82,8 +77,7 @@ class character(pygame.sprite.Sprite):
         pressed = pygame.key.get_pressed()
 
         #tohle je blok nad hracem, pres kterej se kontroluje jestli se muze postavit
-        SpaceCheckHeight = self.CharacterVyska if not self.IsCrawling else 150 
-        SpaceCheckerRect = pygame.Rect(self.rect.x, self.rect.y - (SpaceCheckHeight - self.CharacterVyska), self.CharacterSirka,SpaceCheckHeight - self.CharacterVyska)
+        SpaceCheckerRect = pygame.Rect(self.rect.x + 50, self.rect.y - (100 - self.CharacterVyska), 50, 50)
         
         for block in blocks:
             if SpaceCheckerRect.colliderect(block.rect):
@@ -130,7 +124,7 @@ class character(pygame.sprite.Sprite):
 
         # Skakani
         if pressed[pygame.K_UP] and self.OnGround and not self.IsClimbing:
-            self.vel.y = -1135 if not self.IsCrawling else -300 #tady nevim, asi odstranit skakani na zemi uplne? Novy bool - CanJump
+            self.vel.y = -1135 if not self.IsCrawling else 0 #tady nevim, asi odstranit skakani na zemi uplne?
             self.OnGround = False  #Nastavi okamzite ze nejsi na zemi
 
         #lezemi
@@ -230,35 +224,64 @@ class environmentblock(pygame.sprite.Sprite):
         self.vyska = vyska
         self.image = pygame.Surface((self.sirka, self.vyska))
         self.image.fill((255, 255, 255)) 
+        self.OriginalImage = pygame.image.load("Kamen01.png")
+        self.TextureImage = pygame.transform.scale(self.OriginalImage, (75, 75))
         self.rect = self.image.get_rect(topleft=(round(self.pos.x), round(self.pos.y)))
 
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y, OnGround):
         super().__init__()
         self.pos = pygame.math.Vector2(x, y)
-        self.move = pygame.math.Vector2(100, 0)  #pocatecni rychlost
+        self.move = pygame.math.Vector2(200, 0)  #pocatecni rychlost x, jde doprava
         self.OnGround = OnGround
         self.image = pygame.Surface((150, 50))
         self.image.fill((200, 0, 200))
         self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
-        self.Speed = 100  #Rychlost pohybu
-        self.CanCPlayer = False
+        self.Speed = 200  #Rychlost pohybu
+        self.CanCPlayer = False # Can see ((c -> [sí] = see)) player
         self.DivaSeDoprava = True
 
-        #puvodni obrazek
-        self.OriginalImage = pygame.image.load("Enemy01.png").convert_alpha()
-        #load textury a resize pro lezeni a stani
-        self.StandingImage = pygame.transform.scale(self.OriginalImage, (300, 100))
+        # Patrol parametry
+        self.patrolStart = x #Pocatecni pozice patrolu, rovna se enemy spawnu
+        self.basePatrolRange = 300  # Pocatecni hodnota
+        self.maxPatrolRange = 2000  # Max Vzdalenost kam az dojde behem sveho hledani Hrace, postupne se bude zvetsovat treba (momentalne je mapa 3940 jednotek siroka)
+        self.currentPatrolRange = self.basePatrolRange  # Soucasne nastaveni patrolu
+        self.patrolDirection = 1 #haha 1Direction
+        self.patrolCycles = 0  # Pocitacka cyklu (protoze chodi tam a zpet)
+        self.expandRange = True  # Jestli ma na dalsim cyklu jit dal
+        
+        # Hunt parametry
+        self.huntCooldown = 0
+        self.huntSpeed = 300  # Rychlejsi nez hrac kdyz lovi
+        self.huntRange = 400  # Vzdalenost na jakou detekuje hrace
+        self.isHunting = False
+        
+        # skakani
+        self.jumpForce = -1000 #stejne jako hrac
+        self.jumpCooldown = 0
+        self.maxJumpCooldown = 1.0  # 1 sekunda cooldown
+        self.jumping = False
 
-        #Toto je pocatecni image
+        #nacteni a nastaveni textury spritu
+        self.OriginalImage = pygame.image.load("Enemy01.png").convert_alpha()
+        self.StandingImage = pygame.transform.scale(self.OriginalImage, (300, 100))
         self.image = self.StandingImage
         self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
 
     def update(self, time_passed, blocks):
-        self.move.y += 5000 * time_passed  #Gravitace
+        #skok schlazeniodpocet updejt
+        if self.jumpCooldown > 0:
+            self.jumpCooldown -= time_passed
 
-        # Update kolizi a check pozice
-        self.pos.x += self.move.x * time_passed
+        #gravitace
+        self.move.y += 5000 * time_passed
+
+        self.OnGround = False
+
+        if self.huntCooldown > 0:
+            self.huntCooldown -= time_passed
+
+        # Update kolizi a update pozice
         self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
         self.check_collisions_x(blocks)
 
@@ -266,28 +289,100 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
         self.check_collisions_y(blocks)
 
-        if self.move.x > 0:
-            if self.DivaSeDoprava: #pokud se divas doprava tak se otoci image
-                CurrentImage = self.StandingImage
-                self.image = pygame.transform.flip(CurrentImage, True, False) #otoceni image (prvni bool je osa X, druhy Y)
-                self.DivaSeDoprava = False #uz se nediva doprava
-        elif self.move.x <= 0:
-            if not self.DivaSeDoprava: #stejny co vyse
-                CurrentImage = self.StandingImage
-                self.image = CurrentImage #tady se ale pouzije origo image
-                self.DivaSeDoprava = True
+        #Skakani spoustene pres funkci check_collisions_x(blocks)
+        if self.jumping and self.OnGround and self.jumpCooldown <= 0:
+            self.move.y = self.jumpForce
+            self.jumpCooldown = self.maxJumpCooldown
+            self.jumping = False
+
+        #flipovani textury
+        if self.move.x > 0 and not self.DivaSeDoprava: #pohyb doprava
+            self.image = pygame.transform.flip(self.StandingImage, True, False) #otoceni image (prvni bool je osa X, druhy Y)
+            self.DivaSeDoprava = True  #uz se diva doprava
+        elif self.move.x < 0 and self.DivaSeDoprava:
+            self.image = self.StandingImage  #tady se ale pouzije origo image
+            self.DivaSeDoprava = False
+
+    def patrol(self, Hrac, AllCaveSprites, time_passed):
+        if self.isHunting: #pokud lovi, spust hunt :)
+            self.hunt(Hrac, AllCaveSprites, time_passed)
+            return
+
+
+        #Pohyb nepritele podle patrolu
+        self.move.x = self.Speed * self.patrolDirection
+        self.pos.x += self.move.x * time_passed
+        self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
+        
+        #Kdyz se dostane na kraj svyho patrol range tak se otoci
+        #TODO: zatim neresi ze se muze zaseknout 
+        distance_from_start = abs(round(self.pos.x) - self.patrolStart)
+        if distance_from_start >= self.currentPatrolRange:
+            self.patrolDirection *= -1  #otocka
+            self.patrolCycles += 1
+
+        #kazde 2 cykly tj. tam a zpet se prida range
+            if self.patrolCycles % 2 == 0 and self.expandRange:
+                self.currentPatrolRange = min(self.currentPatrolRange + 400, self.maxPatrolRange)
+                self.expandRange = False
+            else:
+                self.expandRange = True
+
+        self.check_player_visibility(Hrac, AllCaveSprites)
+
+    def check_player_visibility(self, Hrac, AllCaveSprites):
+
+        #Tohle vsechno jen checkuje jestli vidi hrace
+        #A kouka jednou na nohy a jednou na hlavu, protoze mi to prislo lepsi
+        player_bottom = (Hrac.rect.center[0], Hrac.rect.bottom - 10)
+        player_top = (Hrac.rect.center[0], Hrac.rect.top + 10)
+        enemy_top = (self.rect.center[0], self.rect.top + 20)
+
+        self.CanCPlayer = True
+
+        distanceToPlayer = self.pos.distance_to(Hrac.pos)
+
+        #checkujes jestli nevidi hrace
+        for block in AllCaveSprites:
+            if block.rect.clipline(player_bottom, enemy_top) or block.rect.clipline(player_top, enemy_top):
+                self.CanCPlayer = False
+                break
+
+        # Start huntu pokud vidi hrace a je dost blizko
+        if self.CanCPlayer and distanceToPlayer < self.huntRange and self.huntCooldown <= 0:
+            self.isHunting = True
+
+
+    def hunt(self, Hrac, AllCaveSprites, time_passed):
+        distance = self.pos.distance_to(Hrac.pos)
+
+        #Pokud je hrac moc daleko, vrati se zpet k patrolu
+        if distance > self.huntRange * 1.3:  #Trosku vic range nez se vzda
+            self.isHunting = False
+            self.huntCooldown = 2.0  # 2 sekundy cooldown nez muze zase ĺovit
+            return
+
+        # Pohyb smerem k hraci
+        direction = 1 if Hrac.pos.x > self.pos.x else -1 
+        self.move.x = self.huntSpeed * direction
+        self.pos.x += self.move.x * time_passed
+        
+        #Jakmile se dostane blizko, game over
+        if distance < 20:
+            game_over_screen()
+
 
     def check_collisions_x(self, blocks):
         for block in blocks:
             if self.rect.colliderect(block.rect):
+                if self.OnGround:
+                    self.jumping = True
                 if self.move.x > 0:  # pohybuje se doprava
                     self.rect.right = block.rect.left
                 elif self.move.x < 0:  # pohyb doleva
                     self.rect.left = block.rect.right
-                self.move.y -= 1000
-                self.move.x *= -1  # obrati se
                 self.pos.x = self.rect.midbottom[0]
-
+                    
 
     def check_collisions_y(self, blocks):
         for block in blocks:
@@ -301,51 +396,12 @@ class Enemy(pygame.sprite.Sprite):
                     self.move.y = 0
                 self.pos.y = self.rect.midbottom[1]
 
-    def patrol(self, Hrac, screen, AllCaveSprites):
-            player_bottom = (Hrac.rect.center[0], Hrac.rect.bottom - 10)
-            player_top = (Hrac.rect.center[0], Hrac.rect.top + 10)
-            enemy_top = (self.rect.center[0], self.rect.top + 20)
-            
-            self.CanCPlayer_Top = True
-            self.CanCPlayer_Center = True
-            
-            if self.move.x > 0: #pohyb doprava
-                self.Doprava = True
-                self.Doleva = False
-
-            elif self.move.x < 0:
-                self.Doleva = True
-                self.Doprava = False
-
-            #checkujes dvakrat, protoze jednou je to pro vrchol hrace a jednou pro spodek hrace
-            for block in AllCaveSprites:
-                if block.rect.clipline(player_bottom, enemy_top):
-                    self.CanCPlayer_Center = False
-                    break  #Jakmile neco blokuje vyhled enemy brejkujes loop
-            for block in AllCaveSprites:
-                if block.rect.clipline(player_top, enemy_top):
-                    self.CanCPlayer_Top = False
-                    break  #Jakmile neco blokuje vyhled enemy brejkujes loop
-
-    
-            #vykreslovani car to pak muzes smazat a navic se ted asi ani nevykresluji idk
-            if self.CanCPlayer_Center:
-                pygame.draw.line(screen, COLORS["RED"], player_bottom, enemy_top, 5)
-            else:
-                pygame.draw.line(screen, COLORS["GREEN"], player_bottom, enemy_top, 5)
-            if self.CanCPlayer_Top:
-                pygame.draw.line(screen, COLORS["RED"], player_top, enemy_top, 5)
-            else:
-                pygame.draw.line(screen, COLORS["GREEN"], player_top, enemy_top, 5)
-
-            if self.CanCPlayer_Center or self.CanCPlayer_Top:
-                pass
-                # self.hunt()
 
     def killCheck(self, game_state):
         kolizeCheck = pygame.sprite.spritecollide(game_state.HracSprite.sprite, game_state.enemy_sprite, False)
         if kolizeCheck:
-            print('ted ma hrac umrit')
+            print('Umrels, prohrals!')
+            game_over_screen()
 
 class GameClock: #tohle je lepsi pocitadlo aby to fungovalo i kdyz hejbes s oknem
     def __init__(self, target_fps=60):
@@ -360,7 +416,7 @@ class GameClock: #tohle je lepsi pocitadlo aby to fungovalo i kdyz hejbes s okne
         delta = (current_time - self.last_time) / 1000.0
         self.last_time = current_time
         
-        # maximalni cap  na 0.25 funguje asi nejlip
+        # maximalni cap  na 0.25 funguje nejlip
         if delta > 0.25:  # Cap at 1/4 second
             delta = self.fixed_delta
             
@@ -378,6 +434,7 @@ class GameState:
         self.enemy_sprite = None
         self.game_clock = None
         self.HracSprite = None
+        self.time_passed = None
 
 def initPygame():
     pygame.init()
@@ -389,24 +446,12 @@ def CreateMap():
     AllCaveSprites = pygame.sprite.Group()
     
     mapp = open("map", "r")
-    
-    # Ground and climbing wall
-    # blocks = (
-    #     environmentblock(0, 540, 2280, 50),  # podlaha
-    #     environmentblock(0, 0, 10, 720)      # lezecka st�na nalevo (testovaci)
-    # )
-    
-    #prozat�m random bloky
-    # for _ in range(40):
-    #     x = environmentblock(random.randint(0, 2230),random.randint(300, 490), 50, 50)
-    #     AllCaveSprites.add(x)
-    
+
     for i,x in enumerate(mapp) :
         for j,y in enumerate(x) :
             if y!='2' :
                 AllCaveSprites.add(environmentblock(j*75,i*75,75,75))
-    
-    #AllCaveSprites.add(blocks)
+
     return AllCaveSprites
 
 def game_loop(game_state):
@@ -415,8 +460,9 @@ def game_loop(game_state):
             if event.type == pygame.QUIT:
                 game_state.running = False
         
-        #Kalkulator casu
+        #Kalkulator ubehleho casu
         delta_time = game_state.game_clock.tick()
+        game_state.time_passed = delta_time 
         
         # Vsechny updaty
         game_state.camera.update()
@@ -424,7 +470,7 @@ def game_loop(game_state):
         
         enemy = game_state.enemy_sprite.sprites()[0]
         enemy.update(delta_time, game_state.AllCaveSprites)
-        enemy.patrol(game_state.player, game_state.screen, game_state.AllCaveSprites)
+        enemy.patrol(game_state.player, game_state.AllCaveSprites, game_state.time_passed)
         enemy.killCheck(game_state)
         
         #Vykreslovani - renderovani
@@ -437,7 +483,8 @@ def render_game(game_state):
     for sprite in game_state.AllCaveSprites:
         pos = game_state.camera.apply(sprite)
         if pos[0] > -75 and pos[0]<1280 and pos[1]>-75 and pos[1] <720 :
-            game_state.screen.blit(sprite.image, pos)
+            #game_state.screen.blit(sprite.image, pos)
+            game_state.screen.blit(sprite.TextureImage, pos)
     
     #Vykresleni hrace a enemy
     player = game_state.player
