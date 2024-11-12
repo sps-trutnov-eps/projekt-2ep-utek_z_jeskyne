@@ -1,5 +1,5 @@
 import pygame
-from movement import main, COLORS
+from game_engine import main, COLORS
 
 
 pygame.display.set_caption('NuttyPutty')
