@@ -280,7 +280,7 @@ class Enemy(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
         self.Speed = 200  #Rychlost pohybu
         self.CanCPlayer = False # Can see ((c -> [sí] = see)) player
-        self.DivaSeDoprava = True
+        self.DivaSeDoprava = False
 
         # Patrol parametry
         self.patrolStart = x #Pocatecni pozice patrolu, rovna se enemy spawnu
