@@ -12,7 +12,13 @@ COLORS = {
     'BLACK': (0, 0, 0),
     'WHITE': (255, 255, 255)
 }
-
+def n_choose_k(n,k) :
+    return math.factorial(n)/(math.factorial(k) * math.factorial(n - k))
+def cub_blezier(vec, x) :
+    e = 0
+    for i in range(4) :
+        e+=n_choose_k(4,i)*(1-x)**(4-i)*x**i*vec[i]
+    return e
 def initGame():
     game_state = GameState()
     
@@ -72,15 +78,9 @@ class character(pygame.sprite.Sprite):
         self.IsCrawling = False
         self.IsClimbing = False
         self.DivaSeDoprava = True
-    def n_choose_k(n,k) :
-        return math.factorial(n)/(math.factorial(k) * math.factorial(n - k))
-    def cub_blezier(vec, x) :
-        e = 0
-        for i in range(4) :
-            e+=n_choose_k(4,i)*(1-x)**(4-i)*x**i*vec[i]
-        return e
     def update() :
-        pass
+        kp = pygame.key.get_pressed()
+        
 class Camera:
     def __init__(self, target, screen_width, screen_height):
         self.target = target  # Tohle je sledovanej objekt
