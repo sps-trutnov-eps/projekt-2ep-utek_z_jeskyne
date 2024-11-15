@@ -1,6 +1,7 @@
 import pygame
 from pygame import time
 from GameOver import game_over_screen
+import math
 #from tkinter import Toplevel
 
 screen = pygame.display.set_mode((1280, 720))
@@ -71,120 +72,15 @@ class character(pygame.sprite.Sprite):
         self.IsCrawling = False
         self.IsClimbing = False
         self.DivaSeDoprava = True
-
-    def update(self, time_passed, blocks):
-        self.CanStandUp = True
-        pressed = pygame.key.get_pressed()
-
-        #tohle je blok nad hracem, pres kterej se kontroluje jestli se muze postavit
-        SpaceCheckerRect = pygame.Rect(self.rect.x + 50, self.rect.y - (100 - self.CharacterVyska), 50, 50)
-        
-        for block in blocks:
-            if SpaceCheckerRect.colliderect(block.rect):
-                self.CanStandUp = False
-                break
-        #Tohle handeluje zmenu mezi stanim a plazenim i s texturama
-        if pressed[pygame.K_LCTRL] and self.cooldown <= 0:
-            if not self.IsCrawling:  #Zmeni se na plazeni
-                self.CharacterSirka, self.CharacterVyska = 150, 50
-                self.GroundSpeed = 70
-                self.IsCrawling = True
-                #Textura handeling
-                self.image = self.CrawlingImage #nastavi image na resizenuty imagee
-                self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y))) #znovu nastavi pozici aby nedoslo k desyncu
-
-                
-            elif self.IsCrawling and self.CanStandUp:  #Zmena na postaveni, pokud ma nad sebou misto
-                self.CharacterSirka, self.CharacterVyska = 50, 150
-                self.GroundSpeed = 250
-                self.IsCrawling = False
-                #Textura handeling, stejne jako vyse
-                self.image = self.StandingImage
-                self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y)))
-            self.cooldown = 0.2
-        if self.cooldown > 0:
-            self.cooldown -= time_passed 
-
-
-
-        # Horizontalni movement
-        self.vel.x = 0
-        if pressed[pygame.K_LEFT]:# or pressed[pygame.K_a]:
-            self.vel.x -= self.GroundSpeed
-            if self.DivaSeDoprava: #pokud se divas doprava tak se otoci image
-                CurrentImage = self.StandingImage if not self.IsCrawling else self.CrawlingImage #check jestli ma byt postava na vysku nebo sirku
-                self.image = pygame.transform.flip(CurrentImage, True, False) #otoceni image (prvni bool je osa X, druhy Y)
-                self.DivaSeDoprava = False #uz se nediva doprava
-        if pressed[pygame.K_RIGHT]:# or pressed[pygame.K_d]:
-            self.vel.x += self.GroundSpeed
-            if not self.DivaSeDoprava: #stejny co vyse
-                CurrentImage = self.StandingImage if not self.IsCrawling else self.CrawlingImage
-                self.image = CurrentImage #tady se ale pouzije origo image
-                self.DivaSeDoprava = True
-
-        # Skakani
-        if pressed[pygame.K_UP] and self.OnGround and not self.IsClimbing:
-            self.vel.y = -1135 if not self.IsCrawling else 0 #tady nevim, asi odstranit skakani na zemi uplne?
-            self.OnGround = False  #Nastavi okamzite ze nejsi na zemi
-
-        #lezemi
-        if pressed[pygame.K_f] and self.MuzesLezt:
-            self.IsClimbing = True
-        else:
-            self.IsClimbing = False
-        if self.IsClimbing:
-            if pressed[pygame.K_UP]:
-                self.vel.y = -self.ClimbSpeed
-            elif pressed[pygame.K_DOWN]:
-                self.vel.y = self.ClimbSpeed
-            else:
-                self.vel.y = 0  # Zustanes na miste pokud se nehejbes
-        elif not self.OnGround:
-            # Gravitace ale jen pokud nelezes a nejses na zemi
-            self.vel.y += 5000 * time_passed
-        else:
-            self.vel.y = 0
-
-        # Updejt pozic a check kolizi pro X a Y
-        self.pos.x += self.vel.x * time_passed
-        self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
-        self.check_collisions_x(blocks)
-
-        self.pos.y += self.vel.y * time_passed
-        self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
-        self.check_collisions_y(blocks)
-
-        #return pressed
-
-    def check_collisions_x(self, blocks):
-        self.MuzesLezt = False
-        for block in blocks:
-            if self.rect.colliderect(block.rect):
-                self.MuzesLezt = True
-                if self.vel.x > 0:  # Pohyb doprava
-                    self.rect.right = block.rect.left
-                elif self.vel.x < 0:  # Pohyb doleva
-                    self.rect.left = block.rect.right
-                self.pos.x = self.rect.centerx
-                break  # Brejk kdyz je nalezena kolize
-
-    def check_collisions_y(self, blocks):
-        self.OnGround = False
-        for block in blocks:
-            if self.rect.colliderect(block.rect):
-                if self.vel.y > 0:  # Falling
-                    self.rect.bottom = block.rect.top
-                    self.vel.y = 0
-                    self.OnGround = True
-                elif self.vel.y < 0:  # Jumping
-                    self.rect.top = block.rect.bottom
-                    self.vel.y = 0
-                self.pos.y = self.rect.bottom
-                break
-
-        if self.IsClimbing and not self.MuzesLezt:
-            self.IsClimbing = False
-
+    def n_choose_k(n,k) :
+        return math.factorial(n)/(math.factorial(k) * math.factorial(n - k))
+    def cub_blezier(vec, x) :
+        e = 0
+        for i in range(4) :
+            e+=n_choose_k(4,i)*(1-x)**(4-i)*x**i*vec[i]
+        return e
+    def update() :
+        pass
 class Camera:
     def __init__(self, target, screen_width, screen_height):
         self.target = target  # Tohle je sledovanej objekt
