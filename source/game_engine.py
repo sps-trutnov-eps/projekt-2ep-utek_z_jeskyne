@@ -1,10 +1,34 @@
 import pygame
 import random
+import pygame_light2d as pl2d
+from pygame_light2d import LightingEngine, PointLight, Hull
 from pygame.locals import *
 from pygame import time
 from GameOver import game_over_screen
+pygame.init()
 
-screen = pygame.display.set_mode((1280, 720))
+# Screen resolution and lighting engine setup
+screen_res = (1280, 720)
+lights_engine = LightingEngine(
+    screen_res=screen_res, native_res=screen_res, lightmap_res=(int(screen_res[0]/2.5), int(screen_res[1]/2.5)))
+
+# Set ambient light
+lights_engine.set_ambient(15, 15, 15, 255) #tohle dela "tmu" r, g, b, -
+# Add initial hull
+vertices = [(125, 50), (200, 50), (200, 125), (125, 125)]
+hull = Hull(vertices)
+lights_engine.hulls.append(hull)
+
+# Add a point light - use default coordinates
+head_light = PointLight(
+    screen_res[0] // 2,  # x coordinate (center of screen)
+    screen_res[1] // 2,  # y coordinate (center of screen)
+    150,  # radius
+    (255, 193, 0, 255)  # Warm light color (R,G,B,A)
+)
+
+
+lights_engine.lights.append(head_light)
 COLORS = {
     'RED': (255, 0, 0),
     'GREEN': (0, 255, 0),
@@ -16,8 +40,12 @@ COLORS = {
 def initGame():
     game_state = GameState()
     
-    # init Pygame
-    game_state.screen, game_state.clock = initPygame()
+    # init Pygame without setting display mode
+    pygame.init()
+    
+    # init screen and clock
+    game_state.screen = pygame.display.set_mode(screen_res, pygame.OPENGL | pygame.DOUBLEBUF) #bitwise or = |
+    game_state.clock = pygame.time.Clock()
     
     # HRAC vytvoreni
     game_state.player = character(1000, 100, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
@@ -55,17 +83,6 @@ class character(pygame.sprite.Sprite):
         self.CharacterSirka = CharacterSirka
         self.CharacterVyska = CharacterVyska
 
-        #puvodni obrazek
-        self.OriginalImage = pygame.image.load("Character01.png").convert_alpha()
-        #load textury a resize pro lezeni a stani
-        self.StandingImage = pygame.transform.scale(self.OriginalImage, (70, 150))
-        self.CrawlingImage = pygame.transform.rotate(self.OriginalImage, -90)
-        self.CrawlingImage = pygame.transform.scale(self.CrawlingImage, (150, 70))
-
-        #Toto je zacatecni image
-        self.image = self.StandingImage
-        self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
-
         #staty a stavy
         self.cooldown = 0   #Cooldown mezi zmenenim stavu (stani/plazeni)
         self.GroundSpeed = 250  #rychlost pohybu normalne
@@ -75,6 +92,47 @@ class character(pygame.sprite.Sprite):
         self.IsCrawling = False
         self.IsClimbing = False
         self.DivaSeDoprava = True
+
+
+        # Load the original image as a Pygame surface first to get dimensions
+        self.original_surface = pygame.image.load("Character01.png")
+        
+        # Create standing and crawling surfaces with proper dimensions
+        self.standing_surface = pygame.transform.scale(self.original_surface, (70, 150))
+        self.crawling_surface = pygame.transform.scale(self.original_surface, (150, 70))
+        self.flipped_surface = pygame.transform.flip(self.standing_surface, True, False)
+        
+        # Convert surfaces to textures
+        self.StandingImage = lights_engine.surface_to_texture(self.standing_surface)
+        self.CrawlingImage = lights_engine.surface_to_texture(self.crawling_surface)
+        self.FlippedImage = lights_engine.surface_to_texture(self.flipped_surface)
+
+        #soucasny vyska,sirka pro zmenu crawling/standing
+        self.current_width = self.standing_surface.get_width()
+        self.current_height = self.standing_surface.get_height()
+        
+        # Set initial image and create rect with correct dimensions
+        self.current_surface = self.standing_surface  # Keep track of current surface for dimensions
+        self.image = self.StandingImage  # Current texture for rendering
+        self.rect = pygame.Rect(
+            round(self.pos.x), 
+            round(self.pos.y),
+            self.current_surface.get_width(),
+            self.current_surface.get_height()
+        )
+
+    def update_rect_dimensions(self, width, height, pos_x, pos_y):
+        #updatuje sirku vysku s origo rectama
+        old_bottom = self.rect.bottom
+        old_centerx = self.rect.centerx
+        self.rect = pygame.Rect(
+            round(pos_x),
+            round(pos_y),
+            width,
+            height
+        )
+        self.rect.bottom = old_bottom
+        self.rect.centerx = old_centerx
 
     def update(self, time_passed, blocks):
         self.CanStandUp = True
@@ -93,21 +151,32 @@ class character(pygame.sprite.Sprite):
                 self.GroundSpeed = 70
                 self.IsCrawling = True
                 #Textura handeling
-                self.image = self.CrawlingImage #nastavi image na resizenuty imagee
-                self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y))) #znovu nastavi pozici aby nedoslo k desyncu
-
-                
+                self.image = self.CrawlingImage #nastavi image na resizenuty image
+                self.current_width = self.crawling_surface.get_width()
+                self.current_height = self.crawling_surface.get_height()
+                self.update_rect_dimensions(
+                    self.current_width,
+                    self.current_height,
+                    self.pos.x,
+                    self.pos.y
+                ) 
             elif self.IsCrawling and self.CanStandUp:  #Zmena na postaveni, pokud ma nad sebou misto
                 self.CharacterSirka, self.CharacterVyska = 50, 150
                 self.GroundSpeed = 250
                 self.IsCrawling = False
                 #Textura handeling, stejne jako vyse
-                self.image = self.StandingImage
-                self.rect = self.image.get_rect(midbottom=(round(self.pos.x), round(self.pos.y)))
+                self.current_width = self.standing_surface.get_width()
+                self.current_height = self.standing_surface.get_height()
+                self.update_rect_dimensions(
+                    self.current_width,
+                    self.current_height,
+                    self.pos.x,
+                    self.pos.y
+                )
             self.cooldown = 0.2
+
         if self.cooldown > 0:
             self.cooldown -= time_passed 
-
 
 
         # Horizontalni movement
@@ -116,7 +185,7 @@ class character(pygame.sprite.Sprite):
             self.vel.x -= self.GroundSpeed
             if self.DivaSeDoprava: #pokud se divas doprava tak se otoci image
                 CurrentImage = self.StandingImage if not self.IsCrawling else self.CrawlingImage #check jestli ma byt postava na vysku nebo sirku
-                self.image = pygame.transform.flip(CurrentImage, True, False) #otoceni image (prvni bool je osa X, druhy Y)
+                self.image = self.FlippedImage #otoceni image (prvni bool je osa X, druhy Y)
                 self.DivaSeDoprava = False #uz se nediva doprava
         if pressed[pygame.K_RIGHT]:# or pressed[pygame.K_d]:
             self.vel.x += self.GroundSpeed
@@ -130,7 +199,7 @@ class character(pygame.sprite.Sprite):
             self.vel.y = -1135 if not self.IsCrawling else 0 #tady nevim, asi odstranit skakani na zemi uplne?
             self.OnGround = False  #Nastavi okamzite ze nejsi na zemi
 
-        #lezemi
+        #lezeni
         if pressed[pygame.K_f] and self.MuzesLezt:
             self.IsClimbing = True
         else:
@@ -157,7 +226,6 @@ class character(pygame.sprite.Sprite):
         self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
         self.check_collisions_y(blocks)
 
-        #return pressed
 
     def check_collisions_x(self, blocks):
         self.MuzesLezt = False
@@ -191,10 +259,12 @@ class character(pygame.sprite.Sprite):
 
 class Light:
     def __init__(self, x, y):
-        self.source = [x,y]
-        self.particles = []      # [loc, velocity, timer]
-        self.cooldown = 0
-        
+        self.head_light = PointLight(
+            x, y,  # Use actual x, y coordinates
+            150,  # radius
+            (255, 193, 0, 255)  # Warm light color (R,G,B,A)
+        )
+        lights_engine.lights.append(self.head_light)
 
     def circleSurface(self, radius, color):
         surf = pygame.Surface((radius * 2, radius * 2))
@@ -203,25 +273,35 @@ class Light:
         return surf
 
     def createSource(self, player, camera_offset):
-        PosHrac = [player.rect.centerx, player.rect.centery]
+        print(f"Camera offset: {camera_offset}, Type: {type(camera_offset)}")
+        # Calculate head position (slightly above character center)
+        head_x = player.rect.centerx - camera_offset[0]
+        head_y = player.rect.top - camera_offset[1] + 20  # Offset from top of character
+        
+        # Update the point light position to follow the head
+        self.head_light.x = head_x
+        self.head_light.y = head_y
 
+        # Particle effects for additional atmosphere
         self.cooldown += 1
-
-        #                                   pos      random pohyb do stran      pohyb nahoru    jak budou velky, postupne se zmensujou
-
         if self.cooldown > 3:
-            self.particles.append([[PosHrac[0], PosHrac[1]], [random.uniform(-0.5, 0.5), -1.8], random.randint(2, 3)])
+            self.particles.append([
+                [head_x, head_y],  # Start particles from head position
+                [random.uniform(-0.5, 0.5), -1.8], 
+                random.randint(2, 3)
+            ])
             self.cooldown = 0
 
+        # Update existing particles
         for particle in self.particles:
-            particle[0][0] += particle[1][0] #pohyb do stran
-            particle[0][1] += particle[1][1] #pohyb nahoru
-            particle[1][1] += 0.004 #to je pohyb nahoru
-            particle[2] -= 0.03  #to je zmensuje
+            particle[0][0] += particle[1][0]
+            particle[0][1] += particle[1][1]
+            particle[1][1] += 0.004
+            particle[2] -= 0.03
+            
             if particle[2] > 0:
                 radius = int(particle[2] * 4)
                 light_surf = self.circleSurface(radius, (255, 193, 0))
-                screen.blit(light_surf, (particle[0][0] - camera_offset[0] - radius, particle[0][1] - camera_offset[1] - radius - 70), special_flags=pygame.BLEND_RGB_ADD)
             else:
                 self.particles.remove(particle)
         
@@ -265,9 +345,27 @@ class environmentblock(pygame.sprite.Sprite):
         self.vyska = vyska
         self.image = pygame.Surface((self.sirka, self.vyska))
         self.image.fill((255, 255, 255)) 
-        self.OriginalImage = pygame.image.load("Kamen01.png")
-        self.TextureImage = pygame.transform.scale(self.OriginalImage, (75, 75))
-        self.rect = self.image.get_rect(topleft=(round(self.pos.x), round(self.pos.y)))
+
+        #####################################################################################################################
+        # Load the original image as a Pygame surface first to get dimensions
+        self.original_surface = pygame.image.load("Kamen01.png")
+        
+        # Create normal surfaces with proper dimensions
+        self.standing_surface = pygame.transform.scale(self.original_surface, (75, 75))
+        
+        # Convert surfaces to textures
+        self.NormalImage = lights_engine.surface_to_texture(self.standing_surface)
+        
+        # Set initial image and create rect with correct dimensions
+        self.current_surface = self.standing_surface  # Keep track of current surface for dimensions
+        self.image = self.NormalImage  # Current texture for rendering
+        self.rect = pygame.Rect(
+            round(self.pos.x), 
+            round(self.pos.y),
+            self.current_surface.get_width(),
+            self.current_surface.get_height()
+        )
+
 
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y, OnGround):
@@ -303,11 +401,25 @@ class Enemy(pygame.sprite.Sprite):
         self.maxJumpCooldown = 1.0  # 1 sekunda cooldown
         self.jumping = False
 
-        #nacteni a nastaveni textury spritu
-        self.OriginalImage = pygame.image.load("Enemy01.png").convert_alpha()
-        self.StandingImage = pygame.transform.scale(self.OriginalImage, (300, 100))
-        self.image = self.StandingImage
-        self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
+
+        # Load and prepare both normal and flipped textures at initialization
+        self.original_surface = pygame.image.load("Enemy01.png")
+        self.standing_surface = pygame.transform.scale(self.original_surface, (300, 100))
+        self.flipped_surface = pygame.transform.flip(self.standing_surface, True, False)
+        
+        # Convert surfaces to textures
+        self.StandingImage = lights_engine.surface_to_texture(self.standing_surface)
+        self.FlippedImage = lights_engine.surface_to_texture(self.flipped_surface)
+        
+        # Set initial image and create rect with correct dimensions
+        self.current_surface = self.standing_surface  # Keep track of current surface for dimensions
+        self.image = self.StandingImage  # Current texture for rendering
+        self.rect = pygame.Rect(
+            round(self.pos.x), 
+            round(self.pos.y),
+            self.current_surface.get_width(),
+            self.current_surface.get_height()
+        )
 
     def update(self, time_passed, blocks):
         #skok schlazeniodpocet updejt
@@ -338,10 +450,10 @@ class Enemy(pygame.sprite.Sprite):
 
         #flipovani textury
         if self.move.x > 0 and not self.DivaSeDoprava: #pohyb doprava
-            self.image = pygame.transform.flip(self.StandingImage, True, False) #otoceni image (prvni bool je osa X, druhy Y)
+            self.image = self.FlippedImage
             self.DivaSeDoprava = True  #uz se diva doprava
         elif self.move.x < 0 and self.DivaSeDoprava:
-            self.image = self.StandingImage  #tady se ale pouzije origo image
+            self.image = self.StandingImage
             self.DivaSeDoprava = False
 
     def patrol(self, Hrac, AllCaveSprites, time_passed):
@@ -452,7 +564,7 @@ class GameClock: #tohle je lepsi pocitadlo aby to fungovalo i kdyz hejbes s okne
         self.fixed_delta = 1.0 / target_fps
         
     def tick(self):
-        """Returns a fixed delta time regardless of actual frame time"""
+        #vraci pevnou deltu casu
         current_time = time.get_ticks()
         delta = (current_time - self.last_time) / 1000.0
         self.last_time = current_time
@@ -517,30 +629,48 @@ def game_loop(game_state):
         
         #Vykreslovani - renderovani
         render_game(game_state)
-        pygame.display.flip()
 
 def render_game(game_state):
-    game_state.screen.fill(COLORS['BLACK']) #no neni to hezci v dictu
+    # Clear the lighting engine surface
+    lights_engine.clear(0, 0, 0, 255)
     
     #Vykresleni bloku 
     for sprite in game_state.AllCaveSprites:
         pos = game_state.camera.apply(sprite)
-        if pos[0] > -75 and pos[0]<1280 and pos[1]>-75 and pos[1] <720 :
-            #game_state.screen.blit(sprite.image, pos)
-            game_state.screen.blit(sprite.TextureImage, pos)
+        if pos[0] > -75 and pos[0]<1280 and pos[1]>-75 and pos[1] <720:
+            # musis pridat destinaci a zdroj kazdymu rectu
+            # Convert tuples to pygame.Rect objects
+            dest_rect = pygame.Rect(pos[0], pos[1], sprite.rect.width, sprite.rect.height)
+            source_rect = pygame.Rect(0, 0, sprite.rect.width, sprite.rect.height)
+            lights_engine.render_texture(sprite.NormalImage, pl2d.BACKGROUND, dest_rect, source_rect)
 
     
-    camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y) #pro svetlo
+    camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y) #pro svetlo na svicce
 
     #Vykresleni hrace a enemy
     player = game_state.player
     enemy = game_state.enemy_sprite.sprites()[0]
 
-    game_state.screen.blit(player.image, game_state.camera.apply(player))
-    game_state.screen.blit(enemy.image, game_state.camera.apply(enemy))
 
-    #vykresleni svetla
+    # hrac se vsema nalezitostma (rect)
+    player_pos = game_state.camera.apply(player)
+    player_dest = pygame.Rect(player_pos[0], player_pos[1], player.rect.width, player.rect.height)
+    player_source = pygame.Rect(0, 0, player.rect.width, player.rect.height)
+    lights_engine.render_texture(player.image, pl2d.BACKGROUND, player_dest, player_source)
+
+    #render enemy se spravnejma rectama
+    enemy_pos = game_state.camera.apply(enemy)
+    enemy_dest = pygame.Rect(enemy_pos[0], enemy_pos[1], enemy.rect.width, enemy.rect.height)
+    enemy_source = pygame.Rect(0, 0, enemy.rect.width, enemy.rect.height)
+    lights_engine.render_texture(enemy.image, pl2d.BACKGROUND, enemy_dest, enemy_source)
+
+    #vykresleni svetla na svicce
     game_state.Light.createSource(game_state.player, camera_offset)
+    
+    # Render lights
+    lights_engine.render()
+    
+
     pygame.display.flip()
 
 def main():
