@@ -12,23 +12,26 @@ screen_res = (1280, 720)
 lights_engine = LightingEngine(
     screen_res=screen_res, native_res=screen_res, lightmap_res=(int(screen_res[0]/2.5), int(screen_res[1]/2.5)))
 
-# Set ambient light
-lights_engine.set_ambient(15, 15, 15, 255) #tohle dela "tmu" r, g, b, -
-# Add initial hull
+# Then initialize lighting engine
+lights_engine = LightingEngine(
+    screen_res=screen_res, 
+    native_res=screen_res, 
+    lightmap_res=screen_res
+)
+
+#osvetleni sveta "ambient"
+#tohle dela tmu r, g, b, a
+lights_engine.set_ambient(20, 20, 20, 255)
+
+
+light = PointLight(position=(100, -100), power=1., radius=250)
+light.set_color(255, 100, 0, 255)
+lights_engine.lights.append(light)
+
 vertices = [(125, 50), (200, 50), (200, 125), (125, 125)]
 hull = Hull(vertices)
 lights_engine.hulls.append(hull)
 
-# Add a point light - use default coordinates
-head_light = PointLight(
-    screen_res[0] // 2,  # x coordinate (center of screen)
-    screen_res[1] // 2,  # y coordinate (center of screen)
-    150,  # radius
-    (255, 193, 0, 255)  # Warm light color (R,G,B,A)
-)
-
-
-lights_engine.lights.append(head_light)
 COLORS = {
     'RED': (255, 0, 0),
     'GREEN': (0, 255, 0),
@@ -40,11 +43,11 @@ COLORS = {
 def initGame():
     game_state = GameState()
     
-    # init Pygame without setting display mode
+    # init pygame
     pygame.init()
     
-    # init screen and clock
-    game_state.screen = pygame.display.set_mode(screen_res, pygame.OPENGL | pygame.DOUBLEBUF) #bitwise or = |
+    # init obrazovku a hodiny
+    game_state.screen = pygame.display.get_surface()
     game_state.clock = pygame.time.Clock()
     
     # HRAC vytvoreni
@@ -64,6 +67,7 @@ def initGame():
     game_state.AllCaveSprites = CreateMap()
     
     #Enemy init, pozdejc jich mozna bude vic
+    #TODO: spawn ruzne po mape
     enemy = Enemy(300, 0, True)
     game_state.enemy_sprite = pygame.sprite.Group()
     game_state.enemy_sprite.add(enemy)
@@ -99,7 +103,7 @@ class character(pygame.sprite.Sprite):
         
         # Create standing and crawling surfaces with proper dimensions
         self.standing_surface = pygame.transform.scale(self.original_surface, (70, 150))
-        self.crawling_surface = pygame.transform.scale(self.original_surface, (150, 70))
+        self.crawling_surface = pygame.transform.scale(self.original_surface, (75, 75)) #lmao udelej z nej ctverec a vleze se vsude
         self.flipped_surface = pygame.transform.flip(self.standing_surface, True, False)
         
         # Convert surfaces to textures
@@ -260,51 +264,26 @@ class character(pygame.sprite.Sprite):
 class Light:
     def __init__(self, x, y):
         self.head_light = PointLight(
-            x, y,  # Use actual x, y coordinates
-            150,  # radius
-            (255, 193, 0, 255)  # Warm light color (R,G,B,A)
+            position=(x,y),        #souradnice x, y
+            power = 5,            # Default power
+            radius = 250,         # Random Radius
         )
+        self.head_light.set_color(255,100,0, 255)
         lights_engine.lights.append(self.head_light)
 
-    def circleSurface(self, radius, color):
-        surf = pygame.Surface((radius * 2, radius * 2))
-        pygame.draw.circle(surf, color, (radius, radius), radius)
-        surf.set_colorkey((0, 0, 0))
-        return surf
-
     def createSource(self, player, camera_offset):
-        print(f"Camera offset: {camera_offset}, Type: {type(camera_offset)}")
-        # Calculate head position (slightly above character center)
-        head_x = player.rect.centerx - camera_offset[0]
-        head_y = player.rect.top - camera_offset[1] + 20  # Offset from top of character
-        
-        # Update the point light position to follow the head
-        self.head_light.x = head_x
-        self.head_light.y = head_y
+        #hlavova pozice na vrchu hrace
+        head_x = float(player.rect.centerx)
+        head_y = float(player.rect.top)
 
-        # Particle effects for additional atmosphere
-        self.cooldown += 1
-        if self.cooldown > 3:
-            self.particles.append([
-                [head_x, head_y],  # Start particles from head position
-                [random.uniform(-0.5, 0.5), -1.8], 
-                random.randint(2, 3)
-            ])
-            self.cooldown = 0
+        print(f"Number of lights: {len(lights_engine.lights)}")
+        for i, light in enumerate(lights_engine.lights):
+            print(f"Light {i}: Position={light.position}, Radius={light.radius}, Power={light.power}")
+        print(f"Player rect: {player.rect}")
 
-        # Update existing particles
-        for particle in self.particles:
-            particle[0][0] += particle[1][0]
-            particle[0][1] += particle[1][1]
-            particle[1][1] += 0.004
-            particle[2] -= 0.03
-            
-            if particle[2] > 0:
-                radius = int(particle[2] * 4)
-                light_surf = self.circleSurface(radius, (255, 193, 0))
-            else:
-                self.particles.remove(particle)
-        
+        # Update the head light position
+        self.head_light.position = (head_x, head_y)
+
 
 class Camera:
     def __init__(self, target, screen_width, screen_height):
@@ -312,7 +291,7 @@ class Camera:
         self.offset = pygame.math.Vector2(0, 0)
         self.SCREEN_WIDTH = 1280
         self.SCREEN_HEIGHT = 720
-        
+
         #Nastaveni kamery
         self.LERP_SPEED = 0.1
         self.DEAD_ZONE_X = 120
@@ -331,7 +310,7 @@ class Camera:
         # Tohle dela smoothing
         self.offset.x = self.lerp(self.offset.x, target_x, self.LERP_SPEED)
         self.offset.y = self.lerp(self.offset.y, target_y, self.LERP_SPEED)
-
+        
     def apply(self, entity):
         #aplikuje ofset
         return entity.rect.copy().topleft - self.offset
@@ -365,7 +344,6 @@ class environmentblock(pygame.sprite.Sprite):
             self.current_surface.get_width(),
             self.current_surface.get_height()
         )
-
 
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y, OnGround):
@@ -647,30 +625,27 @@ def render_game(game_state):
     
     camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y) #pro svetlo na svicce
 
-    #Vykresleni hrace a enemy
-    player = game_state.player
-    enemy = game_state.enemy_sprite.sprites()[0]
-
-
     # hrac se vsema nalezitostma (rect)
+    player = game_state.player
     player_pos = game_state.camera.apply(player)
     player_dest = pygame.Rect(player_pos[0], player_pos[1], player.rect.width, player.rect.height)
     player_source = pygame.Rect(0, 0, player.rect.width, player.rect.height)
     lights_engine.render_texture(player.image, pl2d.BACKGROUND, player_dest, player_source)
 
     #render enemy se spravnejma rectama
+    enemy = game_state.enemy_sprite.sprites()[0]
     enemy_pos = game_state.camera.apply(enemy)
     enemy_dest = pygame.Rect(enemy_pos[0], enemy_pos[1], enemy.rect.width, enemy.rect.height)
     enemy_source = pygame.Rect(0, 0, enemy.rect.width, enemy.rect.height)
     lights_engine.render_texture(enemy.image, pl2d.BACKGROUND, enemy_dest, enemy_source)
 
-    #vykresleni svetla na svicce
+    #Update pozice Light
     game_state.Light.createSource(game_state.player, camera_offset)
     
     # Render lights
+
     lights_engine.render()
     
-
     pygame.display.flip()
 
 def main():
