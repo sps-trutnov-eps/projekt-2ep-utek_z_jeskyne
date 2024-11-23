@@ -19,18 +19,8 @@ lights_engine = LightingEngine(
     lightmap_res=screen_res
 )
 
-#osvetleni sveta "ambient"
-#tohle dela tmu r, g, b, a
-lights_engine.set_ambient(20, 20, 20, 255)
-
-
-light = PointLight(position=(100, -100), power=1., radius=250)
-light.set_color(255, 100, 0, 255)
-lights_engine.lights.append(light)
-
-vertices = [(125, 50), (200, 50), (200, 125), (125, 125)]
-hull = Hull(vertices)
-lights_engine.hulls.append(hull)
+#osvetleni sveta "ambient" a dela to tu tmu
+lights_engine.set_ambient(5, 5, 5, 255)
 
 COLORS = {
     'RED': (255, 0, 0),
@@ -265,16 +255,16 @@ class Light:
     def __init__(self, x, y):
         self.head_light = PointLight(
             position=(x,y),        #souradnice x, y
-            power = 5,            # Default power
-            radius = 250,         # Random Radius
+            power = 3,            # Default power
+            radius = 300,         # Random Radius
         )
         self.head_light.set_color(255,100,0, 255)
         lights_engine.lights.append(self.head_light)
 
     def createSource(self, player, camera_offset):
         #hlavova pozice na vrchu hrace
-        head_x = float(player.rect.centerx)
-        head_y = float(player.rect.top)
+        head_x = float(player.rect.centerx - camera_offset[0])
+        head_y = float(player.rect.top - camera_offset[1])
 
         print(f"Number of lights: {len(lights_engine.lights)}")
         for i, light in enumerate(lights_engine.lights):
