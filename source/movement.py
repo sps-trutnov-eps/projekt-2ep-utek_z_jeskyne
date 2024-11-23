@@ -16,9 +16,10 @@ def n_choose_k(n,k) :
     return math.factorial(n)/(math.factorial(k) * math.factorial(n - k))
 
 def ease_func(vec, x, inv=False) : # kvadratická bezierova křivka vyřešena pro x
+    x = min(max(x,0),1)
     if inv :
-        return (((-2*vec.y+((2*vec.y)**2+4*x*(1-2*vec.y))**(0.5) )/(2-4*vec.y) * (2-4*vec.x)+2*vec.x)**2 - (2*vec.x)**2)/(4*(1-2*vec.x))
-    return (((-2*vec.x+((2*vec.x)**2+4*x*(1-2*vec.x))**(0.5) )/(2-4*vec.x) * (2-4*vec.y)+2*vec.y)**2 - (2*vec.y)**2)/(4*(1-2*vec.y))
+        return ( ((-2*vec.y+((2*vec.y)**2+4*x*(1-2*vec.y))**(0.5) )/(2-4*vec.y) * (2-4*vec.x)+2*vec.x)**2 - (2*vec.x)**2)/(4*(1-2*vec.x))
+    return ( ((-2*vec.x+((2*vec.x)**2+4*x*(1-2*vec.x))**(0.5) )/(2-4*vec.x) * (2-4*vec.y)+2*vec.y)**2 - (2*vec.y)**2)/(4*(1-2*vec.y) )
 
 def initGame():
     game_state = GameState()
@@ -40,7 +41,7 @@ def initGame():
     game_state.AllCaveSprites = CreateMap()
     
     #Enemy init, pozdejc jich mozna bude vic
-    enemy = Enemy(1000, 0, True)
+    enemy = Enemy(1000, 1000, True)
     game_state.enemy_sprite = pygame.sprite.Group()
     game_state.enemy_sprite.add(enemy)
     
@@ -112,14 +113,15 @@ class character(pygame.sprite.Sprite):
                     self.CanClimb = True
         #zpětné nastavení x
         self.run_x = ease_func(self.run_vec,self.vel.x/self.GroundSpeed, inv=True)
-        self.idle_x = ease_func(self.idle_vec,self.vel.x/self.GroundSpeed, inv=True)
+        self.idle_x = ease_func(self.idle_vec,self.vel.x/self.GroundSpeed, inv=False)
         self.climb_x = ease_func(self.climb_vec,self.vel.y/self.ClimbSpeed, inv=True)
 
         #nastavení rychlosti
         
         if not self.OnGround :
-            self.vel.y = min(self.vel.y + 950/2*delta**2, 1000)
-        if kp[pygame.K_SPACE] : 
+            self.vel.y = min(self.vel.y + 3800*delta, 3000)
+        if kp[pygame.K_UP] : 
+            self.vel.y =0
             self.vel += pygame.Vector2(0,-500)
         if kp[pygame.K_RIGHT] or kp[pygame.K_LEFT] :
             if kp[pygame.K_RIGHT] and self.OnGround and self.vel.x >= 0 :
@@ -130,10 +132,10 @@ class character(pygame.sprite.Sprite):
                 self.vel.x = -self.GroundSpeed*ease_func(self.run_vec,self.run_x)
             elif self.OnGround :
                 self.cturn_x+= 2*delta 
-                self.vel.x = (self.GroundSpeed-self.GroundSpeed*ease_func(self.cturn_vec,self.idle_x))
+                self.vel.x = abs(self.vel.x)/self.vel.x*(self.GroundSpeed-self.GroundSpeed*ease_func(self.cturn_vec,self.idle_x))
         elif self.OnGround and abs(self.vel.x) > 0:
             self.idle_x += 0.7*delta
-            self.vel.x = (self.GroundSpeed-self.GroundSpeed*ease_func(self.idle_vec,self.idle_x))
+            self.vel.x = abs(self.vel.x)/self.vel.x*(self.GroundSpeed-self.GroundSpeed*ease_func(self.idle_vec,self.idle_x))
 
     def check_collisions_x(self, blocks):
         self.MuzesLezt = False
