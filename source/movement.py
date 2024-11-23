@@ -14,11 +14,12 @@ COLORS = {
 }
 def n_choose_k(n,k) :
     return math.factorial(n)/(math.factorial(k) * math.factorial(n - k))
-def cub_blezier(vec, x) :
-    e = 0
-    for i in range(4) :
-        e+=n_choose_k(4,i)*(1-x)**(4-i)*x**i*vec[i]
-    return e
+
+def ease_func(vec, x, inv=False) : # kvadratická bezierova křivka vyřešena pro x
+    if inv :
+        return (((-2*vec.y+((2*vec.y)**2+4*x*(1-2*vec.y))**(0.5) )/(2-4*vec.y) * (2-4*vec.x)+2*vec.x)**2 - (2*vec.x)**2)/(4*(1-2*vec.x))
+    return (((-2*vec.x+((2*vec.x)**2+4*x*(1-2*vec.x))**(0.5) )/(2-4*vec.x) * (2-4*vec.y)+2*vec.y)**2 - (2*vec.y)**2)/(4*(1-2*vec.y))
+
 def initGame():
     game_state = GameState()
     
@@ -26,7 +27,7 @@ def initGame():
     game_state.screen, game_state.clock = initPygame()
     
     # HRAC vytvoreni
-    game_state.player = character(1000, 100, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
+    game_state.player = character(100, 50, 100, OnGround = False, CharacterSirka = 50, CharacterVyska = 150)
     
     #Sprite Hrace
     game_state.HracSprite = pygame.sprite.GroupSingle()
@@ -39,7 +40,7 @@ def initGame():
     game_state.AllCaveSprites = CreateMap()
     
     #Enemy init, pozdejc jich mozna bude vic
-    enemy = Enemy(300, 0, True)
+    enemy = Enemy(1000, 0, True)
     game_state.enemy_sprite = pygame.sprite.Group()
     game_state.enemy_sprite.add(enemy)
     
@@ -71,16 +72,65 @@ class character(pygame.sprite.Sprite):
 
         #staty a stavy
         self.cooldown = 0   #Cooldown mezi zmenenim stavu (stani/plazeni)
-        self.GroundSpeed = 250  #rychlost pohybu normalne
-        self.ClimbSpeed = 100
+        self.GroundSpeed = 300  #rychlost pohybu normalne
+        self.ClimbSpeed = 225
         self.CanStandUp = True
-        self.IsCrawling = False
         self.IsCrawling = False
         self.IsClimbing = False
         self.DivaSeDoprava = True
-    def update() :
+        self.CanClimb = False
+
+        #pohybove posuvniky :) # představuji procento rychlosti ktere bude jeste prohnano funkci na easovani # <0,1>
+        self.run_x = 0 # progress akcelerace
+        self.run_vec = pygame.Vector2(0.05,0.98) # parametry pro zahlazovací funkci
+        self.idle_x = 0
+        self.idle_vec = pygame.Vector2(0.23,0.8)
+        self.cturn_x = 0
+        self.cturn_vec = pygame.Vector2(1,0)
+        self.climb_x = 0
+        self.climb_vec = pygame.Vector2(0.6,0.97)
+        self.climbidle_x = 0
+        self.climbidle_vec = pygame.Vector2(0.9,0.1)
+    def update(self,delta,bloky) :
         kp = pygame.key.get_pressed()
+        self.pos += self.vel*delta
+        #detekce kolizí
+        self.CanClimb = False
+        self.OnGround = False
+        for x in bloky :
+            if not self.OnGround :
+                if pygame.Rect.colliderect(x.rect, pygame.Rect(self.pos.x, self.pos.y+2, self.CharacterSirka, self.CharacterVyska)) :
+                    self.OnGround = True
+            if not self.CanClimb :
+                if pygame.Rect.colliderect(x.rect, pygame.Rect(self.pos.x-2, self.pos.y, self.CharacterSirka, self.CharacterVyska)) :
+                    self.CanClimb = True
+                elif pygame.Rect.colliderect(x.rect, pygame.Rect(self.pos.x+2, self.pos.y, self.CharacterSirka, self.CharacterVyska)) :
+                    self.CanClimb = True
+        #zpětné nastavení x
+        self.run_x = ease_func(self.run_vec,self.vel.x/self.GroundSpeed, inv=True)
+        self.idle_x = ease_func(self.idle_vec,self.vel.x/self.GroundSpeed, inv=True)
+        self.climb_x = ease_func(self.climb_vec,self.vel.y/self.ClimbSpeed, inv=True)
+
+        #nastavení rychlosti
         
+        if not self.OnGround :
+            self.vel.y = min(self.vel.y + 390*delta, 500)
+        if kp[pygame.K_SPACE] : 
+            self.vel += pygame.Vector2(0,-500)
+        if kp[pygame.K_RIGHT] or kp[pygame.K_LEFT] :
+            if kp[pygame.K_RIGHT] and self.OnGround and self.vel.x >= 0 :
+                self.run_x += delta
+                self.vel.x = self.GroundSpeed*ease_func(self.run_vec,self.run_x)
+            elif kp[pygame.K_LEFT] and self.OnGround and self.vel.x <= 0 :
+                self.run_x += delta
+                self.vel.x = -self.GroundSpeed*ease_func(self.run_vec,self.run_x)
+            elif self.OnGround :
+                self.cturn_x+= 2*delta 
+                self.self.vel.x = -abs(self.vel.x)/self.vel.x*self.GroundSpeed*ease_func(self.idle_vec,self.idle_x)
+        elif self.OnGround and abs(self.vel.x) > 0:
+            self.idle_x += 0.7*delta
+            self.vel.x = -abs(self.vel.x)/self.vel.x*self.GroundSpeed*ease_func(self.idle_vec,self.idle_x)
+
 class Camera:
     def __init__(self, target, screen_width, screen_height):
         self.target = target  # Tohle je sledovanej objekt
