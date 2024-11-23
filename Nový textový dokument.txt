@@ -1,0 +1,29 @@
+        # Particle effects for additional atmosphere
+        self.cooldown += 1
+        if self.cooldown > 3:
+            self.particles.append([
+                [head_x, head_y],  # Start particles from head position
+                [random.uniform(-0.5, 0.5), -1.8], 
+                random.randint(2, 3)
+            ])
+            self.cooldown = 0
+
+        # Update existing particles
+        for particle in self.particles:
+            particle[0][0] += particle[1][0]
+            particle[0][1] += particle[1][1]
+            particle[1][1] += 0.004
+            particle[2] -= 0.03
+            
+            if particle[2] > 0:
+                radius = int(particle[2] * 4)
+                light_surf = self.circleSurface(radius, (255, 193, 0))
+            else:
+                self.particles.remove(particle)
+        
+
+    #def circleSurface(self, radius, color, player):
+     #   surf = pygame.Surface((radius * 2, radius * 2))
+      #  pygame.draw.circle(surf, color, (player.x, player.y), radius)
+       # surf.set_colorkey((0, 0, 0))
+        #return surf
