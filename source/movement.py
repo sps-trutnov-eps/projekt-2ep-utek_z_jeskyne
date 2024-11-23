@@ -94,6 +94,10 @@ class character(pygame.sprite.Sprite):
     def update(self,delta,bloky) :
         kp = pygame.key.get_pressed()
         self.pos += self.vel*delta
+        self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
+        self.check_collisions_x(bloky)
+        self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
+        self.check_collisions_y(bloky)
         #detekce kolizí
         self.CanClimb = False
         self.OnGround = False
@@ -114,7 +118,7 @@ class character(pygame.sprite.Sprite):
         #nastavení rychlosti
         
         if not self.OnGround :
-            self.vel.y = min(self.vel.y + 390*delta, 500)
+            self.vel.y = min(self.vel.y + 950/2*delta**2, 1000)
         if kp[pygame.K_SPACE] : 
             self.vel += pygame.Vector2(0,-500)
         if kp[pygame.K_RIGHT] or kp[pygame.K_LEFT] :
@@ -126,10 +130,38 @@ class character(pygame.sprite.Sprite):
                 self.vel.x = -self.GroundSpeed*ease_func(self.run_vec,self.run_x)
             elif self.OnGround :
                 self.cturn_x+= 2*delta 
-                self.self.vel.x = -abs(self.vel.x)/self.vel.x*self.GroundSpeed*ease_func(self.idle_vec,self.idle_x)
+                self.vel.x = (self.GroundSpeed-self.GroundSpeed*ease_func(self.cturn_vec,self.idle_x))
         elif self.OnGround and abs(self.vel.x) > 0:
             self.idle_x += 0.7*delta
-            self.vel.x = -abs(self.vel.x)/self.vel.x*self.GroundSpeed*ease_func(self.idle_vec,self.idle_x)
+            self.vel.x = (self.GroundSpeed-self.GroundSpeed*ease_func(self.idle_vec,self.idle_x))
+
+    def check_collisions_x(self, blocks):
+        self.MuzesLezt = False
+        for block in blocks:
+            if self.rect.colliderect(block.rect):
+                self.MuzesLezt = True
+                if self.vel.x > 0:  # Pohyb doprava
+                    self.rect.right = block.rect.left
+                elif self.vel.x < 0:  # Pohyb doleva
+                    self.rect.left = block.rect.right
+                self.pos.x = self.rect.centerx
+                break  # Brejk kdyz je nalezena kolize
+    def check_collisions_y(self, blocks):
+        self.OnGround = False
+        for block in blocks:
+            if self.rect.colliderect(block.rect):
+                if self.vel.y > 0:  # Falling
+                    self.rect.bottom = block.rect.top
+                    self.vel.y = 0
+                    self.OnGround = True
+                elif self.vel.y < 0:  # Jumping
+                    self.rect.top = block.rect.bottom
+                    self.vel.y = 0
+                self.pos.y = self.rect.bottom
+                break
+
+        if self.IsClimbing and not self.MuzesLezt:
+            self.IsClimbing = False
 
 class Camera:
     def __init__(self, target, screen_width, screen_height):
