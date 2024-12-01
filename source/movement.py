@@ -104,7 +104,7 @@ class character(pygame.sprite.Sprite):
         self.OnGround = False
         for x in bloky :
             if not self.OnGround :
-                if pygame.Rect.colliderect(x.rect, pygame.Rect(self.pos.x, self.pos.y+2, self.CharacterSirka, self.CharacterVyska)) :
+                if pygame.Rect.colliderect(x.rect, pygame.Rect(self.pos.x, self.pos.y+2, self.CharacterSirka, self.CharacterVyska)) : #omluva
                     self.OnGround = True
             if not self.CanClimb :
                 if pygame.Rect.colliderect(x.rect, pygame.Rect(self.pos.x-2, self.pos.y, self.CharacterSirka, self.CharacterVyska)) :
