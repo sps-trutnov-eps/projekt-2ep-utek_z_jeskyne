@@ -189,6 +189,19 @@ class character(pygame.sprite.Sprite):
             self.IsClimbing = False
 
 
+class GameFinish:
+    def __init__(self, x, y):
+        self.Image = pygame.image.load("Budouci_art.png").convert_alpha()
+        self.x = x
+        self.y = y
+        self.rect = self.Image.get_rect(topleft=(x, y))
+    
+    def CheckEndGame(self, Hrac):
+        if self.rect.colliderect(Hrac.rect):
+            print("Game END, you escaped")
+            return True
+        return False
+
 class Light:
     def __init__(self, x, y):
         self.source = [x,y]
@@ -224,7 +237,6 @@ class Light:
                 screen.blit(light_surf, (particle[0][0] - camera_offset[0] - radius, particle[0][1] - camera_offset[1] - radius - 70), special_flags=pygame.BLEND_RGB_ADD)
             else:
                 self.particles.remove(particle)
-        
 
 class Camera:
     def __init__(self, target, screen_width, screen_height):
