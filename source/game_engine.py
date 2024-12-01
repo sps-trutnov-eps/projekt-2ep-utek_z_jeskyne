@@ -191,7 +191,7 @@ class character(pygame.sprite.Sprite):
 
 class GameFinish:
     def __init__(self, x, y):
-        self.Image = pygame.image.load("Budouci_art.png").convert_alpha()
+        self.Image = pygame.image.load("Domecek.png").convert_alpha()
         self.x = x
         self.y = y
         self.rect = self.Image.get_rect(topleft=(x, y))
