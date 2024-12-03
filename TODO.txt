@@ -1,0 +1,10 @@
+IN NO PARTICULAR ORDER
+
+svičce se nemeni pozice při crouchovani
+lopata
+svetlo
+game end
+proceduralni mapa
+lepsi textury/animace
+Realný pozadí ať není černý
+enemy AI (aby se umel pohybovat i po Y axis)(načíst mapu něco něco)
