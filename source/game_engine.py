@@ -33,8 +33,7 @@ def initGame():
     game_state.camera = Camera(game_state.player, 1280, 720)
     
     #Postav mapu, upec chleba
-    game_state.CaveRockSprites, game_state.CaveBackgroundSprites = CreateMap()
-   
+    game_state.AllCaveSprites = CreateMap()
     
     #Enemy init, pozdejc jich mozna bude vic
     enemy = Enemy(300, 0, True)
@@ -189,6 +188,7 @@ class character(pygame.sprite.Sprite):
         if self.IsClimbing and not self.MuzesLezt:
             self.IsClimbing = False
 
+
 class GameFinish:
     def __init__(self, x, y):
         self.Image = pygame.image.load("Domecek.png").convert_alpha()
@@ -269,7 +269,7 @@ class Camera:
         return entity.rect.copy().topleft - self.offset
 
 class environmentblock(pygame.sprite.Sprite):
-    def __init__(self, x, y, sirka, vyska, is_background=True):
+    def __init__(self, x, y, sirka, vyska):
         super().__init__()
         self.pos = pygame.math.Vector2(x, y)
         self.move = pygame.math.Vector2()
@@ -277,13 +277,8 @@ class environmentblock(pygame.sprite.Sprite):
         self.vyska = vyska
         self.image = pygame.Surface((self.sirka, self.vyska))
         self.image.fill((255, 255, 255)) 
-
-        self.OriginalImageBackground = pygame.image.load("Kamen01.png")
-        self.BackgroundImage = pygame.transform.scale(self.OriginalImageBackground, (75, 75))
-
-        self.OriginalImage = pygame.image.load("Podlozi01.png")
-        self.Image = pygame.transform.scale(self.OriginalImage, (75, 75))
-        
+        self.OriginalImage = pygame.image.load("Kamen01.png")
+        self.TextureImage = pygame.transform.scale(self.OriginalImage, (75, 75))
         self.rect = self.image.get_rect(topleft=(round(self.pos.x), round(self.pos.y)))
 
 class Enemy(pygame.sprite.Sprite):
@@ -361,9 +356,9 @@ class Enemy(pygame.sprite.Sprite):
             self.image = self.StandingImage  #tady se ale pouzije origo image
             self.DivaSeDoprava = False
 
-    def patrol(self, Hrac, CaveRockSprites, time_passed):
+    def patrol(self, Hrac, AllCaveSprites, time_passed):
         if self.isHunting: #pokud lovi, spust hunt :)
-            self.hunt(Hrac, CaveRockSprites, time_passed)
+            self.hunt(Hrac, AllCaveSprites, time_passed)
             return
 
 
@@ -386,9 +381,9 @@ class Enemy(pygame.sprite.Sprite):
             else:
                 self.expandRange = True
 
-        self.check_player_visibility(Hrac, CaveRockSprites)
+        self.check_player_visibility(Hrac, AllCaveSprites)
 
-    def check_player_visibility(self, Hrac, CaveRockSprites):
+    def check_player_visibility(self, Hrac, AllCaveSprites):
 
         #Tohle vsechno jen checkuje jestli vidi hrace
         #A kouka jednou na nohy a jednou na hlavu, protoze mi to prislo lepsi
@@ -401,7 +396,7 @@ class Enemy(pygame.sprite.Sprite):
         distanceToPlayer = self.pos.distance_to(Hrac.pos)
 
         #checkujes jestli nevidi hrace
-        for block in CaveRockSprites:
+        for block in AllCaveSprites:
             if block.rect.clipline(player_bottom, enemy_top) or block.rect.clipline(player_top, enemy_top):
                 self.CanCPlayer = False
                 break
@@ -411,7 +406,7 @@ class Enemy(pygame.sprite.Sprite):
             self.isHunting = True
 
 
-    def hunt(self, Hrac, CaveRockSprites, time_passed):
+    def hunt(self, Hrac, AllCaveSprites, time_passed):
         distance = self.pos.distance_to(Hrac.pos)
 
         #Pokud je hrac moc daleko, vrati se zpet k patrolu
@@ -488,7 +483,7 @@ class GameState:
         self.clock = None
         self.player = None
         self.camera = None
-        self.CaveRockSprites = None
+        self.AllCaveSprites = None
         self.enemy_sprite = None
         self.game_clock = None
         self.HracSprite = None
@@ -501,21 +496,16 @@ def initPygame():
     return screen, clock
 
 def CreateMap():
-    CaveRockSprites = pygame.sprite.Group()
-    CaveBackgroundSprites = pygame.sprite.Group()
+    AllCaveSprites = pygame.sprite.Group()
     
-    with open("map", "r") as mapp:
-        lines = mapp.readlines()
+    mapp = open("map", "r")
 
-    with open("map", "r") as mapp:
-        for i, x in enumerate(mapp):
-            for j, y in enumerate(x.strip()):
-                if y == '1' or y == '0':
-                    CaveRockSprites.add(environmentblock(j*75, i*75, 75, 75))
-                elif y in '2':
-                    CaveBackgroundSprites.add(environmentblock(j*75, i*75, 75, 75))
+    for i,x in enumerate(mapp) :
+        for j,y in enumerate(x) :
+            if y!='2' :
+                AllCaveSprites.add(environmentblock(j*75,i*75,75,75))
 
-    return CaveRockSprites, CaveBackgroundSprites
+    return AllCaveSprites
 
 def game_loop(game_state):
     while game_state.running:
@@ -529,12 +519,12 @@ def game_loop(game_state):
 
         # Vsechny updaty
         game_state.camera.update()
-        game_state.player.update(delta_time, game_state.CaveRockSprites)
+        game_state.player.update(delta_time, game_state.AllCaveSprites)
 
         
         enemy = game_state.enemy_sprite.sprites()[0]
-        enemy.update(delta_time, game_state.CaveRockSprites)
-        enemy.patrol(game_state.player, game_state.CaveRockSprites, game_state.time_passed)
+        enemy.update(delta_time, game_state.AllCaveSprites)
+        enemy.patrol(game_state.player, game_state.AllCaveSprites, game_state.time_passed)
         enemy.killCheck(game_state)
         
         #Vykreslovani - renderovani
@@ -545,16 +535,11 @@ def render_game(game_state):
     game_state.screen.fill(COLORS['BLACK']) #no neni to hezci v dictu
     
     #Vykresleni bloku 
-    for sprite in game_state.CaveBackgroundSprites:
+    for sprite in game_state.AllCaveSprites:
         pos = game_state.camera.apply(sprite)
-        if pos[0] > -75 and pos[0] < 1280 and pos[1] > -75 and pos[1] < 720:
-            game_state.screen.blit(sprite.BackgroundImage, pos)
-    
-    # Render rock sprites on top of background
-    for sprite in game_state.CaveRockSprites:
-        pos = game_state.camera.apply(sprite)
-        if pos[0] > -75 and pos[0] < 1280 and pos[1] > -75 and pos[1] < 720:
-            game_state.screen.blit(sprite.Image, pos)
+        if pos[0] > -75 and pos[0]<1280 and pos[1]>-75 and pos[1] <720 :
+            #game_state.screen.blit(sprite.image, pos)
+            game_state.screen.blit(sprite.TextureImage, pos)
 
     
     camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y) #pro svetlo
