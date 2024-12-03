@@ -57,7 +57,7 @@ class character(pygame.sprite.Sprite):
         self.CharacterVyska = CharacterVyska
 
         #puvodni obrazek
-        self.OriginalImage = pygame.image.load("Character01.png").convert_alpha()
+        self.OriginalImage = pygame.image.load("Textury/Character01.png").convert_alpha()
         #load textury a resize pro lezeni a stani
         self.StandingImage = pygame.transform.scale(self.OriginalImage, (70, 150))
         self.CrawlingImage = pygame.transform.rotate(self.OriginalImage, -90)
@@ -191,10 +191,14 @@ class character(pygame.sprite.Sprite):
 
 class GameFinish:
     def __init__(self, x, y):
-        self.Image = pygame.image.load("Domecek.png").convert_alpha()
+        self.Image = pygame.image.load("Textury/Domecek.png").convert_alpha()
         self.x = x
         self.y = y
         self.rect = self.Image.get_rect(topleft=(x, y))
+
+    def Spawn():
+        pass
+    #jen at to vezme pocet bloku v prvni rade a vynasobi to 75 a pak to spawne na ty souradnici
     
     def CheckEndGame(self, Hrac):
         if self.rect.colliderect(Hrac.rect):
@@ -278,10 +282,10 @@ class environmentblock(pygame.sprite.Sprite):
         self.image = pygame.Surface((self.sirka, self.vyska))
         self.image.fill((255, 255, 255)) 
 
-        self.OriginalImageBackground = pygame.image.load("Kamen01.png")
+        self.OriginalImageBackground = pygame.image.load("Textury/Kamen01.png")
         self.BackgroundImage = pygame.transform.scale(self.OriginalImageBackground, (75, 75))
 
-        self.OriginalImage = pygame.image.load("Podlozi01.png")
+        self.OriginalImage = pygame.image.load("Textury/Podlozi01.png")
         self.Image = pygame.transform.scale(self.OriginalImage, (75, 75))
         
         self.rect = self.image.get_rect(topleft=(round(self.pos.x), round(self.pos.y)))
@@ -321,7 +325,7 @@ class Enemy(pygame.sprite.Sprite):
         self.jumping = False
 
         #nacteni a nastaveni textury spritu
-        self.OriginalImage = pygame.image.load("Enemy01.png").convert_alpha()
+        self.OriginalImage = pygame.image.load("Textury/Enemy01.png").convert_alpha()
         self.StandingImage = pygame.transform.scale(self.OriginalImage, (300, 100))
         self.image = self.StandingImage
         self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))

@@ -3,7 +3,7 @@ IN NO PARTICULAR ORDER
 svičce se nemeni pozice při crouchovani
 lopata
 svetlo
-game end
+game end - dodělat domecek
 proceduralni mapa
 lepsi textury/animace
 Realný pozadí ať není černý
