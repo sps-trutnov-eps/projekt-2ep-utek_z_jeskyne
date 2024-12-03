@@ -5,6 +5,6 @@ lopata
 svetlo
 game end - dodělat domecek
 proceduralni mapa
-lepsi textury/animace
+lepsi textury/animace (textury pro typ kamene 0 a 1)
 Realný pozadí ať není černý
 enemy AI (aby se umel pohybovat i po Y axis)(načíst mapu něco něco)
