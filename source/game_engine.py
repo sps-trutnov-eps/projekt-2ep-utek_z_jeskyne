@@ -1,8 +1,17 @@
 import pygame
 import random
+import math 
+from typing import List, Tuple 
 from pygame.locals import *
 from pygame import time
 from GameOver import game_over_screen
+from typing import List, Tuple, Dict
+from dataclasses import dataclass
+
+@dataclass
+class Ray:
+    angle: float
+    intersections: Dict[Tuple[float, float], float] = None
 
 screen = pygame.display.set_mode((1280, 720))
 COLORS = {
@@ -12,6 +21,10 @@ COLORS = {
     'BLACK': (0, 0, 0),
     'WHITE': (255, 255, 255)
 }
+
+def read_tile_map():
+    with open("map", "r") as file:
+        return [list(line.strip()) for line in file]
 
 def initGame():
     game_state = GameState()
@@ -26,8 +39,11 @@ def initGame():
     game_state.HracSprite = pygame.sprite.GroupSingle()
     game_state.HracSprite.add(game_state.player) 
     
-    #inicializace svetla
-    game_state.Light = Light(game_state.player.rect.centerx, game_state.player.rect.centery)
+    #inicializace svicky a svetla s mapou bloku
+    game_state.Candle = Candle(game_state.player.rect.centerx, game_state.player.rect.centery)
+    game_state.LightingSystem = LightingSystem(1280, 720)
+    tile_map = read_tile_map() #aby melo svetlo mapu
+    game_state.walls = game_state.LightingSystem.get_wall_segments(tile_map, 75)
 
     #Inicializace Kamery
     game_state.camera = Camera(game_state.player, 1280, 720)
@@ -188,6 +204,151 @@ class character(pygame.sprite.Sprite):
 
         if self.IsClimbing and not self.MuzesLezt:
             self.IsClimbing = False
+ 
+
+class LightingSystem: 
+    def __init__(self, screen_width, screen_height):
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        self.light_surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
+        
+        # Spatial partitioning
+        self.grid_size = 75  # Size of grid cells
+        self.wall_grid = {}
+        
+        # Ray caching
+        self.ray_cache = {}
+        self.last_light_pos = None
+        
+        # Lighting parameters
+        self.ray_count = 360
+        self.max_light_distance = 600
+        self.cache_timeout = 100  # Number of frames to keep cached rays
+
+    def create_wall_grid(self, walls: List[Tuple[Tuple[int, int], Tuple[int, int]]]):
+        """Create a spatial grid for efficient wall lookup"""
+        self.wall_grid.clear()
+        for wall in walls:
+            # Get grid cell coordinates for wall endpoints
+            x1, y1 = wall[0]
+            x2, y2 = wall[1]
+            
+            # Add to multiple grid cells if wall spans multiple cells
+            grid_cells = set()
+            grid_cells.add((int(x1 // self.grid_size), int(y1 // self.grid_size)))
+            grid_cells.add((int(x2 // self.grid_size), int(y2 // self.grid_size)))
+            
+            for cell in grid_cells:
+                if cell not in self.wall_grid:
+                    self.wall_grid[cell] = []
+                self.wall_grid[cell].append(wall)
+
+    def get_wall_segments(self, tile_map, tile_size):
+        walls = []
+        for y, row in enumerate(tile_map):
+            for x, tile in enumerate(row):
+                if tile != '0':
+                    # Create wall segments for the block
+                    walls.append(((x*tile_size, y*tile_size), ((x+1)*tile_size, y*tile_size)))  # Top wall
+                    walls.append(((x*tile_size, (y+1)*tile_size), ((x+1)*tile_size, (y+1)*tile_size)))  # Bottom wall
+                    walls.append(((x*tile_size, y*tile_size), (x*tile_size, (y+1)*tile_size)))  # Left wall
+                    walls.append((((x+1)*tile_size, y*tile_size), ((x+1)*tile_size, (y+1)*tile_size)))  # Right wall
+    
+        return walls
+
+    def get_nearby_walls(self, light_pos: Tuple[float, float]) -> List[Tuple[Tuple[int, int], Tuple[int, int]]]:
+        """Efficiently retrieve walls near the light source"""
+        nearby_walls = set()
+        grid_x = int(light_pos[0] // self.grid_size)
+        grid_y = int(light_pos[1] // self.grid_size)
+        
+        # Check adjacent grid cells
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                cell = (grid_x + dx, grid_y + dy)
+                if cell in self.wall_grid:
+                    nearby_walls.update(self.wall_grid[cell])
+        
+        return list(nearby_walls)
+         
+    def calculate_intersection(self, start: Tuple[float, float], angle: float,  
+                             wall: Tuple[Tuple[int, int], Tuple[int, int]]) -> Tuple[float, float]: 
+        x1, y1 = start 
+        x2 = x1 + math.cos(angle) * self.max_light_distance 
+        y2 = y1 + math.sin(angle) * self.max_light_distance 
+        x3, y3 = wall[0] 
+        x4, y4 = wall[1] 
+                 
+        den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4) 
+        if den == 0: 
+            return None 
+             
+        t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den 
+        u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den 
+         
+        if 0 <= t <= 1 and 0 <= u <= 1: 
+            px = x1 + t * (x2 - x1) 
+            py = y1 + t * (y2 - y1) 
+            return (px, py) 
+        return None 
+ 
+    def cast_light(self, light_pos: Tuple[float, float], walls: List[Tuple[Tuple[int, int], Tuple[int, int]]]) -> None:
+        """Optimized light casting with spatial partitioning and ray caching"""
+        # Initialize or update wall grid if not done
+        if not self.wall_grid:
+            self.create_wall_grid(walls)
+    
+        # Get walls near light source
+        nearby_walls = self.get_nearby_walls(light_pos)
+    
+        # Reset light surface
+        self.light_surface.fill((0, 0, 0, 255))
+    
+        light_vertices = []
+    
+        # Increase ray count and light distance for broader coverage
+        ray_count = 360  # More rays for smoother light
+        max_light_distance = 600  # Increased light distance
+    
+        for i in range(ray_count):
+            angle = (i / ray_count) * math.pi * 2
+        
+            closest_point = None
+            closest_dist = max_light_distance
+        
+            for wall in nearby_walls:
+                intersection = self.calculate_intersection(light_pos, angle, wall)
+                if intersection:
+                    dist = math.sqrt((light_pos[0] - intersection[0])**2 + 
+                                     (light_pos[1] - intersection[1])**2)
+                    if dist < closest_dist:
+                        closest_dist = dist
+                        closest_point = intersection
+        
+            if not closest_point:
+                closest_point = (light_pos[0] + math.cos(angle) * max_light_distance,
+                                 light_pos[1] + math.sin(angle) * max_light_distance)
+        
+            light_vertices.append(closest_point)
+    
+        # Sort and render vertices
+        center_x, center_y = light_pos
+        sorted_vertices = sorted(light_vertices,  
+                                 key=lambda point: math.atan2(point[1] - center_y,  
+                                                             point[0] - center_x))
+    
+        if sorted_vertices:
+            vertices = [(int(x), int(y)) for x in [center_x] for y in [center_y]] + \
+                       [(int(x), int(y)) for x, y in sorted_vertices]
+        
+            light_cone = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+            # Softer, more transparent light
+            pygame.draw.polygon(light_cone, (255, 255, 200, 50), vertices)
+            self.light_surface.blit(light_cone, (0, 0))
+
+    def apply_lighting(self, screen: pygame.Surface) -> None:
+        """Apply lighting to the screen"""
+        screen.blit(self.light_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT) 
 
 class GameFinish:
     def __init__(self, x, y):
@@ -206,7 +367,11 @@ class GameFinish:
             return True
         return False
 
-class Light:
+ 
+if __name__ == "__main__": 
+    main()
+
+class Candle:
     def __init__(self, x, y):
         self.source = [x,y]
         self.particles = []      # [loc, velocity, timer]
@@ -571,7 +736,9 @@ def render_game(game_state):
     game_state.screen.blit(enemy.image, game_state.camera.apply(enemy))
 
     #vykresleni svetla
-    game_state.Light.createSource(game_state.player, camera_offset)
+    game_state.Candle.createSource(game_state.player, camera_offset)
+    game_state.LightingSystem.cast_light((player.rect.centerx - camera_offset[0], player.rect.centery - camera_offset[1]), game_state.walls)
+    game_state.LightingSystem.apply_lighting(game_state.screen)
     pygame.display.flip()
 
 def main():
