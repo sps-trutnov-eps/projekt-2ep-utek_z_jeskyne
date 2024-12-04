@@ -1,17 +1,12 @@
 import pygame
 import random
 import math 
-from typing import List, Tuple 
 from pygame.locals import *
-from pygame import time
+from pygame import draw, time
 from GameOver import game_over_screen
-from typing import List, Tuple, Dict
-from dataclasses import dataclass
 
-@dataclass
-class Ray:
-    angle: float
-    intersections: Dict[Tuple[float, float], float] = None
+
+
 
 screen = pygame.display.set_mode((1280, 720))
 COLORS = {
@@ -21,10 +16,6 @@ COLORS = {
     'BLACK': (0, 0, 0),
     'WHITE': (255, 255, 255)
 }
-
-def read_tile_map():
-    with open("..\map", "r") as file:
-        return [list(line.strip()) for line in file]
 
 def initGame():
     game_state = GameState()
@@ -42,8 +33,6 @@ def initGame():
     #inicializace svicky a svetla s mapou bloku
     game_state.Candle = Candle(game_state.player.rect.centerx, game_state.player.rect.centery)
     game_state.LightingSystem = LightingSystem(1280, 720)
-    tile_map = read_tile_map() #aby melo svetlo mapu
-    game_state.walls = game_state.LightingSystem.get_wall_segments(tile_map, 75)
 
     #Inicializace Kamery
     game_state.camera = Camera(game_state.player, 1280, 720)
@@ -204,156 +193,199 @@ class character(pygame.sprite.Sprite):
 
         if self.IsClimbing and not self.MuzesLezt:
             self.IsClimbing = False
- 
-class LightingSystem: 
+
+class Quadtree:
+    def __init__(self, bounds, capacity):
+        """
+        Initialize a Quadtree node.
+        :param bounds: A pygame.Rect defining the region.
+        :param capacity: Maximum number of objects before subdivision.
+        """
+        self.bounds = pygame.Rect(bounds)  # Region of this quadtree node
+        self.capacity = capacity           # Max objects before subdivision
+        self.objects = []                  # Objects in this region
+        self.divided = False               # Flag for child nodes existence
+
+    def insert(self, obj):
+        """
+        Insert an object into the quadtree.
+        :param obj: Object with a `rect` property (pygame.Rect).
+        :return: True if successfully inserted, False otherwise.
+        """
+        if not self.bounds.colliderect(obj.rect):
+            return False  # Object not within bounds
+
+        if len(self.objects) < self.capacity and not self.divided:
+            self.objects.append(obj)
+            return True
+
+        if not self.divided:
+            self.subdivide()
+
+        # Try inserting into child nodes
+        return (
+            self.northwest.insert(obj) or
+            self.northeast.insert(obj) or
+            self.southwest.insert(obj) or
+            self.southeast.insert(obj)
+        )
+
+    def subdivide(self):
+        """
+        Split this node into four children (quadrants).
+        """
+        x, y, w, h = self.bounds
+        half_w, half_h = w // 2, h // 2
+
+        self.northwest = Quadtree((x, y, half_w, half_h), self.capacity)
+        self.northeast = Quadtree((x + half_w, y, half_h, half_h), self.capacity)
+        self.southwest = Quadtree((x, y + half_h, half_w, half_h), self.capacity)
+        self.southeast = Quadtree((x + half_w, y + half_h, half_w, half_h), self.capacity)
+        self.divided = True
+
+    def query(self, range_rect, found=None):
+        """
+        Retrieve objects within a given range.
+        :param range_rect: A pygame.Rect defining the query range.
+        :param found: List to accumulate found objects.
+        :return: List of found objects.
+        """
+        if found is None:
+            found = []
+
+        if not self.bounds.colliderect(range_rect):
+            return found  # No overlap with this node
+
+        # Check objects in the current node
+        for obj in self.objects:
+            if range_rect.colliderect(obj.rect):
+                found.append(obj)
+
+        # Query child nodes if they exist
+        if self.divided:
+            self.northwest.query(range_rect, found)
+            self.northeast.query(range_rect, found)
+            self.southwest.query(range_rect, found)
+            self.southeast.query(range_rect, found)
+
+        return found
+
+    def clear(self):
+        """
+        Clear all objects and reset the quadtree.
+        """
+        self.objects.clear()
+        self.divided = False
+        if hasattr(self, 'northwest'):
+            self.northwest.clear()
+            self.northeast.clear()
+            self.southwest.clear()
+            self.southeast.clear()
+
+    def debug_draw(self, surface):
+        """
+        Draw the quadtree bounds for debugging.
+        """
+        pygame.draw.rect(surface, (255, 0, 0), self.bounds, 1)
+        if self.divided:
+            self.northwest.debug_draw(surface)
+            self.northeast.debug_draw(surface)
+            self.southwest.debug_draw(surface)
+            self.southeast.debug_draw(surface)
+
+class LightingSystem:
     def __init__(self, screen_width, screen_height):
         self.screen_width = screen_width
         self.screen_height = screen_height
-        self.light_surface = pygame.Surface((screen_width, screen_height), pygame.SRCALPHA)
-        
-        # Spatial partitioning
-        self.grid_size = 75  # Size of grid cells
-        self.wall_grid = {}
-        # Ray caching
-        self.ray_cache = {}
-        self.last_light_pos = None
-        # Lighting parameters
-        self.ray_count = 360
-        self.max_light_distance = 300
-        self.cache_timeout = 100  # Number of frames to keep cached rays
+        self.light_color = (255, 193, 0, 155)
+        self.light_radius = 250
+        self.ray_count = 15
 
-    def create_wall_grid(self, walls):
-        self.wall_grid.clear()
-        for wall in walls:
-            # Get grid cell coordinates for wall endpoints
-            x1, y1 = wall[0]
-            x2, y2 = wall[1]
-            
-            # Add to multiple grid cells if wall spans multiple cells
-            grid_cells = set()
-            grid_cells.add((int(x1 // self.grid_size), int(y1 // self.grid_size)))
-            grid_cells.add((int(x2 // self.grid_size), int(y2 // self.grid_size)))
-            
-            for cell in grid_cells:
-                if cell not in self.wall_grid:
-                    self.wall_grid[cell] = []
-                self.wall_grid[cell].append(wall)
+        # New tracking attributes
+        self.last_player_pos = None
+        self.light_cache = None  # Cached light surface
+        self.movement_threshold = 1  # Pixels of movement to trigger recalculation
 
-    def get_wall_segments(self, tile_map, tile_size):
-        walls = []
-        for y, row in enumerate(tile_map):
-            for x, tile in enumerate(row):
-                if tile != '2':
-                    # Create wall segments for the block
-                    walls.append(((x*tile_size, y*tile_size), ((x+1)*tile_size, y*tile_size)))          # Top wall
-                    walls.append(((x*tile_size, (y+1)*tile_size), ((x+1)*tile_size, (y+1)*tile_size)))  # Bottom wall
-                    walls.append(((x*tile_size, y*tile_size), (x*tile_size, (y+1)*tile_size)))          # Left wall
-                    walls.append((((x+1)*tile_size, y*tile_size), ((x+1)*tile_size, (y+1)*tile_size)))  # Right wall
-    
-        return walls
-
-    def get_nearby_walls(self, light_pos):
-        nearby_walls = set()
-        grid_x = int(light_pos[0] // self.grid_size)
-        grid_y = int(light_pos[1] // self.grid_size)
-        
-        # Check adjacent grid cells
-        for dx in [-1, 0, 1]:
-            for dy in [-1, 0, 1]:
-                cell = (grid_x + dx, grid_y + dy)
-                if cell in self.wall_grid:
-                    nearby_walls.update(self.wall_grid[cell])
-        
-        return list(nearby_walls)
-         
-    def calculate_intersection(self, start, angle, wall): 
-        x1, y1 = start 
-        x2 = x1 + math.cos(angle) * self.max_light_distance 
-        y2 = y1 + math.sin(angle) * self.max_light_distance 
-        x3, y3 = wall[0]
-        x4, y4 = wall[1]
-                 
-        den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4) 
-        if abs(den) < 1e-10:  # Handle near-parallel lines more robustly
-            return None 
-             
-        t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den 
-        u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den 
-     
-        if 0 <= t <= 1 and 0 <= u <= 1: 
-            px = x1 + t * (x2 - x1) 
-            py = y1 + t * (y2 - y1)
-            return (px, py) 
-        return None
- 
-    def cast_light(self, light_pos, walls):       
-    # Initialize or update wall grid if not done
-        if not self.wall_grid:
-            self.create_wall_grid(walls)
-
-    # Get walls near light source
-        nearby_walls = self.get_nearby_walls(light_pos)
-
-    # Reset light surface
-        self.light_surface.fill((0, 0, 0, 255))
-
-        light_vertices = []
-
+    def _calculate_light_polygon(self, player_center_x, player_center_y, wall_edges):
+        light_polygon = []
         for i in range(self.ray_count):
-            angle = (i / self.ray_count) * math.pi * 2
-    
-            closest_point = None
-            closest_dist = self.max_light_distance
-    
-            for wall in nearby_walls:
-                intersection = self.calculate_intersection(light_pos, angle, wall)
-                if intersection:
-                    dist = math.sqrt((light_pos[0] - intersection[0])**2 + 
-                                     (light_pos[1] - intersection[1])**2)
-                    if dist < closest_dist:
-                        closest_dist = dist
-                        closest_point = intersection
-    
-            if not closest_point:
-            # If no intersection, extend ray to max distance
-                closest_point = (
-                    light_pos[0] + math.cos(angle) * self.max_light_distance,
-                    light_pos[1] + math.sin(angle) * self.max_light_distance
+            angle = 2 * math.pi * i / self.ray_count
+            end_x = player_center_x + self.light_radius * math.cos(angle)
+            end_y = player_center_y + self.light_radius * math.sin(angle)
+            closest_intersection = (end_x, end_y)
+            min_distance = self.light_radius
+
+            for wall_edge in wall_edges:
+                intersection = self._line_intersection(
+                    player_center_x, player_center_y, end_x, end_y,
+                    wall_edge[0][0], wall_edge[0][1],
+                    wall_edge[1][0], wall_edge[1][1]
                 )
-    
-            light_vertices.append(closest_point)
-    
-    # Sort vertices to create a continuous polygon
-            center_x, center_y = light_pos
-            sorted_vertices = sorted(
-                light_vertices,  
-                key=lambda point: math.atan2(point[1] - center_y, point[0] - center_x)
-            )
+                if intersection:
+                    dist = math.hypot(
+                        intersection[0] - player_center_x,
+                        intersection[1] - player_center_y
+                    )
+                    if dist < min_distance:
+                        closest_intersection = intersection
+                        min_distance = dist
+            light_polygon.append(closest_intersection)
 
-        if sorted_vertices:
-        # Create polygon with light source as center
-            vertices = [(int(center_x), int(center_y))] + [(int(x), int(y)) for x, y in sorted_vertices]
-        
-            light_cone = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
-        
-        # Create a gradient light effect
-            pygame.draw.polygon(light_cone, (255, 255, 200, 180), vertices)
-        
-        # Optional: Add a softer outer glow
-            outer_vertices = [
-                (int(center_x + (x - center_x) * 1.2), int(center_y + (y - center_y) * 1.2)) 
-                for x, y in sorted_vertices
-            ]
-            outer_vertices = [(int(center_x), int(center_y))] + outer_vertices
-            pygame.draw.polygon(light_cone, (255, 255, 200, 50), outer_vertices)
-        
-            self.light_surface.blit(light_cone, (0, 0))
-        print(f"Light Position: {light_pos}")
-        print(f"Number of Nearby Walls: {len(nearby_walls)}")
-        print(f"Number of Light Vertices: {len(light_vertices)}")
+        return light_polygon
 
-    def apply_lighting(self, screen: pygame.Surface):
-        screen.blit(self.light_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    def cast_light(self, screen, player, wall_sprites, camera_offset):
+    # Check if player has moved significantly
+        current_pos = (player.rect.centerx, player.rect.centery)
+
+        if (self.last_player_pos is None or 
+            math.hypot(current_pos[0] - self.last_player_pos[0],
+                       current_pos[1] - self.last_player_pos[1]) > self.movement_threshold):
+
+            # Recalculate light if moved
+            light_surface = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+            player_center_x = player.rect.centerx - camera_offset[0]
+            player_center_y = player.rect.centery - camera_offset[1]
+            wall_edges = self._get_wall_edges(wall_sprites, camera_offset)
+            light_polygon = self._calculate_light_polygon(player_center_x, player_center_y, wall_edges)
+
+            # Draw light polygon
+            if len(light_polygon) > 2:
+                pygame.draw.polygon(light_surface, self.light_color, light_polygon)
+
+            # Cache the result
+            self.light_cache = light_surface
+            self.last_player_pos = current_pos
+
+
+        # Always blit the cached surface
+        if self.light_cache is not None:
+            screen.blit(self.light_cache, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+
+    def _get_wall_edges(self, wall_sprites, camera_offset):
+        edges = []
+        for wall in wall_sprites:
+            x = wall.rect.x - camera_offset[0]
+            y = wall.rect.y - camera_offset[1]
+            edges.extend([
+                ((x, y), (x + wall.rect.width, y)),
+                ((x + wall.rect.width, y), (x + wall.rect.width, y + wall.rect.height)),
+                ((x, y + wall.rect.height), (x + wall.rect.width, y + wall.rect.height)),
+                ((x, y), (x, y + wall.rect.height))
+            ])
+        return edges
+
+    def _line_intersection(self, x1, y1, x2, y2, x3, y3, x4, y4):
+        denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1)
+        if denom == 0:
+            return None
+        
+        ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom
+        ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom
+
+        if 0 <= ua <= 1 and 0 <= ub <= 1:
+            x = x1 + ua * (x2 - x1)
+            y = y1 + ua * (y2 - y1)
+            return (x, y)
 
 class GameFinish:
     def __init__(self, x, y):
@@ -701,18 +733,27 @@ def game_loop(game_state):
         game_state.camera.update()
         game_state.player.update(delta_time, game_state.CaveRockSprites)
 
-        
         enemy = game_state.enemy_sprite.sprites()[0]
         enemy.update(delta_time, game_state.CaveRockSprites)
         enemy.patrol(game_state.player, game_state.CaveRockSprites, game_state.time_passed)
         enemy.killCheck(game_state)
+        
+        # Add this function to your game loop or initialization process
+        def initialize_quadtree(map_width, map_height, wall_sprites, capacity=4):
+            """
+            Initialize and populate the quadtree with wall objects.
+            """
+            quadtree = Quadtree((0, 0, map_width, map_height), capacity)
+            for wall in wall_sprites:
+                quadtree.insert(wall)
+            return quadtree
         
         #Vykreslovani - renderovani
         render_game(game_state)
         pygame.display.flip()
 
 def render_game(game_state):
-    game_state.screen.fill(COLORS['BLACK']) #no neni to hezci v dictu
+    game_state.screen.fill(COLORS['BLACK']) #clear background
     
     #Vykresleni bloku 
     for sprite in game_state.CaveBackgroundSprites:
@@ -736,10 +777,11 @@ def render_game(game_state):
     game_state.screen.blit(player.image, game_state.camera.apply(player))
     game_state.screen.blit(enemy.image, game_state.camera.apply(enemy))
 
-    #vykresleni svetla
+    #vykresleni svetla - candle
     game_state.Candle.createSource(game_state.player, camera_offset)
-    game_state.LightingSystem.cast_light((player.rect.centerx - camera_offset[0], player.rect.centery - camera_offset[1]), game_state.walls)
-    game_state.LightingSystem.apply_lighting(game_state.screen)
+    #LightSystem
+    camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y)
+    game_state.LightingSystem.cast_light(game_state.screen, game_state.player,game_state.CaveRockSprites, camera_offset)
     pygame.display.flip()
 
 def main():
