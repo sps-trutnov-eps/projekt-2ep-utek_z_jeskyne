@@ -23,7 +23,7 @@ COLORS = {
 }
 
 def read_tile_map():
-    with open("map", "r") as file:
+    with open("..\map", "r") as file:
         return [list(line.strip()) for line in file]
 
 def initGame():
@@ -73,7 +73,7 @@ class character(pygame.sprite.Sprite):
         self.CharacterVyska = CharacterVyska
 
         #puvodni obrazek
-        self.OriginalImage = pygame.image.load("Textury/Character01.png").convert_alpha()
+        self.OriginalImage = pygame.image.load("..\Textury\Character01.png").convert_alpha()
         #load textury a resize pro lezeni a stani
         self.StandingImage = pygame.transform.scale(self.OriginalImage, (70, 150))
         self.CrawlingImage = pygame.transform.rotate(self.OriginalImage, -90)
@@ -270,41 +270,41 @@ class LightingSystem:
         x1, y1 = start 
         x2 = x1 + math.cos(angle) * self.max_light_distance 
         y2 = y1 + math.sin(angle) * self.max_light_distance 
-        x3, y3 = wall[0] 
-        x4, y4 = wall[1] 
+        x3, y3 = wall[0]
+        x4, y4 = wall[1]
                  
         den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4) 
-        if den == 0: 
+        if abs(den) < 1e-10:  # Handle near-parallel lines more robustly
             return None 
              
         t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den 
         u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den 
-         
+     
         if 0 <= t <= 1 and 0 <= u <= 1: 
             px = x1 + t * (x2 - x1) 
-            py = y1 + t * (y2 - y1) 
+            py = y1 + t * (y2 - y1)
             return (px, py) 
-        return None 
+        return None
  
-    def cast_light(self, light_pos, walls):
-        # Initialize or update wall grid if not done
+    def cast_light(self, light_pos, walls):       
+    # Initialize or update wall grid if not done
         if not self.wall_grid:
             self.create_wall_grid(walls)
-    
-        # Get walls near light source
+
+    # Get walls near light source
         nearby_walls = self.get_nearby_walls(light_pos)
-    
-        # Reset light surface
+
+    # Reset light surface
         self.light_surface.fill((0, 0, 0, 255))
-    
+
         light_vertices = []
 
         for i in range(self.ray_count):
             angle = (i / self.ray_count) * math.pi * 2
-        
+    
             closest_point = None
             closest_dist = self.max_light_distance
-        
+    
             for wall in nearby_walls:
                 intersection = self.calculate_intersection(light_pos, angle, wall)
                 if intersection:
@@ -313,27 +313,44 @@ class LightingSystem:
                     if dist < closest_dist:
                         closest_dist = dist
                         closest_point = intersection
-        
+    
             if not closest_point:
-                closest_point = (light_pos[0] + math.cos(angle) * self.max_light_distance,
-                                 light_pos[1] + math.sin(angle) * self.max_light_distance)
-        
+            # If no intersection, extend ray to max distance
+                closest_point = (
+                    light_pos[0] + math.cos(angle) * self.max_light_distance,
+                    light_pos[1] + math.sin(angle) * self.max_light_distance
+                )
+    
             light_vertices.append(closest_point)
     
-        # Sort and render vertices
-        center_x, center_y = light_pos
-        sorted_vertices = sorted(light_vertices,  
-                                 key=lambda point: math.atan2(point[1] - center_y,  
-                                                             point[0] - center_x))
-    
+    # Sort vertices to create a continuous polygon
+            center_x, center_y = light_pos
+            sorted_vertices = sorted(
+                light_vertices,  
+                key=lambda point: math.atan2(point[1] - center_y, point[0] - center_x)
+            )
+
         if sorted_vertices:
-            vertices = [(int(x), int(y)) for x in [center_x] for y in [center_y]] + \
-                       [(int(x), int(y)) for x, y in sorted_vertices]
+        # Create polygon with light source as center
+            vertices = [(int(center_x), int(center_y))] + [(int(x), int(y)) for x, y in sorted_vertices]
         
             light_cone = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
-            # Softer, more transparent light
-            pygame.draw.polygon(light_cone, (255, 255, 200, 50), vertices)
+        
+        # Create a gradient light effect
+            pygame.draw.polygon(light_cone, (255, 255, 200, 180), vertices)
+        
+        # Optional: Add a softer outer glow
+            outer_vertices = [
+                (int(center_x + (x - center_x) * 1.2), int(center_y + (y - center_y) * 1.2)) 
+                for x, y in sorted_vertices
+            ]
+            outer_vertices = [(int(center_x), int(center_y))] + outer_vertices
+            pygame.draw.polygon(light_cone, (255, 255, 200, 50), outer_vertices)
+        
             self.light_surface.blit(light_cone, (0, 0))
+        print(f"Light Position: {light_pos}")
+        print(f"Number of Nearby Walls: {len(nearby_walls)}")
+        print(f"Number of Light Vertices: {len(light_vertices)}")
 
     def apply_lighting(self, screen: pygame.Surface):
         screen.blit(self.light_surface, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
@@ -431,10 +448,10 @@ class environmentblock(pygame.sprite.Sprite):
         self.image = pygame.Surface((self.sirka, self.vyska))
         self.image.fill((255, 255, 255)) 
 
-        self.OriginalImageBackground = pygame.image.load("Textury/Kamen01.png")
+        self.OriginalImageBackground = pygame.image.load("..\Textury\Kamen01.png")
         self.BackgroundImage = pygame.transform.scale(self.OriginalImageBackground, (75, 75))
 
-        self.OriginalImage = pygame.image.load("Textury/Podlozi01.png")
+        self.OriginalImage = pygame.image.load("..\Textury\Podlozi01.png")
         self.Image = pygame.transform.scale(self.OriginalImage, (75, 75))
         
         self.rect = self.image.get_rect(topleft=(round(self.pos.x), round(self.pos.y)))
@@ -474,7 +491,7 @@ class Enemy(pygame.sprite.Sprite):
         self.jumping = False
 
         #nacteni a nastaveni textury spritu
-        self.OriginalImage = pygame.image.load("Textury/Enemy01.png").convert_alpha()
+        self.OriginalImage = pygame.image.load("..\Textury\Enemy01.png").convert_alpha()
         self.StandingImage = pygame.transform.scale(self.OriginalImage, (300, 100))
         self.image = self.StandingImage
         self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
@@ -657,10 +674,10 @@ def CreateMap():
     CaveRockSprites = pygame.sprite.Group()
     CaveBackgroundSprites = pygame.sprite.Group()
     
-    with open("map", "r") as mapp:
+    with open("..\map", "r") as mapp:
         lines = mapp.readlines()
 
-    with open("map", "r") as mapp:
+    with open("..\map", "r") as mapp:
         for i, x in enumerate(mapp):
             for j, y in enumerate(x.strip()):
                 if y == '1' or y == '0':
