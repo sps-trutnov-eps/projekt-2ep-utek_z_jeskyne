@@ -1,11 +1,20 @@
 import pygame
 import random
-import math 
+import math
+import os
 from pygame.locals import *
 from pygame import draw, time
 from GameOver import game_over_screen
 
-
+file_dir = os.path.dirname(os.path.abspath(__file__)) #absolutni path k tomuto game_engine souboru
+parent_dir = os.path.abspath(os.path.join(file_dir, os.path.pardir)) #tohle pouzije path k tomuto py soboru a jde o jeden level vys a pak do textur a nacte texturu
+map_file = os.path.join(parent_dir, "map")
+Enemy_Texture = os.path.join(parent_dir, "Textury", "Enemy01.png")
+PLayer_Texture = os.path.join(parent_dir, "Textury", "Character01.png")
+Kamen1_Texture = os.path.join(parent_dir, "Textury", "Kamen01.png")
+Kamen2_Texture = os.path.join(parent_dir, "Textury", "Kamen02.png")
+Dum_Texture = os.path.join(parent_dir, "Textury", "Domecek01.png")
+Lopata_texture = os.path.join(parent_dir, "Textury", "Lopata01.png")
 
 
 screen = pygame.display.set_mode((1280, 720))
@@ -25,6 +34,13 @@ def initGame():
     
     # HRAC vytvoreni
     game_state.player = character(1000, 100, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
+
+    #lopata
+    game_state.lopata = Shovel(2000, 2000)  # prvni lopata instance, dost daleko aby nebyla videt
+    game_state.shovel_sprite = pygame.sprite.GroupSingle()  # Use Group() instead of GroupSingle()
+    shovel_spawn = game_state.lopata.SpawnList[0]  # Get the first spawn point
+    shovel = Shovel(shovel_spawn[0], shovel_spawn[1])  # Create Shovel at spawn point
+    game_state.shovel_sprite.add(shovel)  # Add to sprite group
     
     #Sprite Hrace
     game_state.HracSprite = pygame.sprite.GroupSingle()
@@ -40,7 +56,6 @@ def initGame():
     #Postav mapu, upec chleba
     game_state.CaveRockSprites, game_state.CaveBackgroundSprites = CreateMap()
    
-    
     #Enemy init, pozdejc jich mozna bude vic
     enemy = Enemy(300, 0, True)
     game_state.enemy_sprite = pygame.sprite.Group()
@@ -50,6 +65,367 @@ def initGame():
     game_state.game_clock = GameClock(60)
     
     return game_state
+
+class Quadtree:
+    def __init__(self, bounds, capacity):
+        """
+        Initialize a Quadtree node.
+        :param bounds: A pygame.Rect defining the region.
+        :param capacity: Maximum number of objects before subdivision.
+        """
+        self.bounds = pygame.Rect(bounds)  # Region of this quadtree node
+        self.capacity = capacity           # Max objects before subdivision
+        self.objects = []                  # Objects in this region
+        self.divided = False               # Flag for child nodes existence
+
+    def insert(self, obj):
+        """
+        Insert an object into the quadtree.
+        :param obj: Object with a `rect` property (pygame.Rect).
+        :return: True if successfully inserted, False otherwise.
+        """
+        if not self.bounds.colliderect(obj.rect):
+            return False  # Object not within bounds
+
+        if len(self.objects) < self.capacity and not self.divided:
+            self.objects.append(obj)
+            return True
+
+        if not self.divided:
+            self.subdivide()
+
+        # Try inserting into child nodes
+        return (
+            self.northwest.insert(obj) or
+            self.northeast.insert(obj) or
+            self.southwest.insert(obj) or
+            self.southeast.insert(obj)
+        )
+
+    def subdivide(self):
+        """
+        Split this node into four children (quadrants).
+        """
+        x, y, w, h = self.bounds
+        half_w, half_h = w // 2, h // 2
+
+        self.northwest = Quadtree((x, y, half_w, half_h), self.capacity)
+        self.northeast = Quadtree((x + half_w, y, half_h, half_h), self.capacity)
+        self.southwest = Quadtree((x, y + half_h, half_w, half_h), self.capacity)
+        self.southeast = Quadtree((x + half_w, y + half_h, half_w, half_h), self.capacity)
+        self.divided = True
+
+    def query(self, range_rect, found=None):
+        """
+        Retrieve objects within a given range.
+        :param range_rect: A pygame.Rect defining the query range.
+        :param found: List to accumulate found objects.
+        :return: List of found objects.
+        """
+        if found is None:
+            found = []
+
+        if not self.bounds.colliderect(range_rect):
+            return found  # No overlap with this node
+
+        # Check objects in the current node
+        for obj in self.objects:
+            if range_rect.colliderect(obj.rect):
+                found.append(obj)
+
+        # Query child nodes if they exist
+        if self.divided:
+            self.northwest.query(range_rect, found)
+            self.northeast.query(range_rect, found)
+            self.southwest.query(range_rect, found)
+            self.southeast.query(range_rect, found)
+
+        return found
+
+    def clear(self):
+        """
+        Clear all objects and reset the quadtree.
+        """
+        self.objects.clear()
+        self.divided = False
+        if hasattr(self, 'northwest'):
+            self.northwest.clear()
+            self.northeast.clear()
+            self.southwest.clear()
+            self.southeast.clear()
+
+    def debug_draw(self, surface):
+        """
+        Draw the quadtree bounds for debugging.
+        """
+        pygame.draw.rect(surface, (255, 0, 0), self.bounds, 1)
+        if self.divided:
+            self.northwest.debug_draw(surface)
+            self.northeast.debug_draw(surface)
+            self.southwest.debug_draw(surface)
+            self.southeast.debug_draw(surface)
+
+class LightingSystem:
+    def __init__(self, screen_width, screen_height):
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        self.light_color = (255, 193, 0, 155)
+        self.light_radius = 250
+        self.ray_count = 15
+
+        # New tracking attributes
+        self.last_player_pos = None
+        self.light_cache = None  # Cached light surface
+        self.movement_threshold = 100000  # Pixels of movement to trigger recalculation
+
+    def _calculate_light_polygon(self, player_center_x, player_center_y, wall_edges):
+        light_polygon = []
+        for i in range(self.ray_count):
+            angle = 2 * math.pi * i / self.ray_count
+            end_x = player_center_x + self.light_radius * math.cos(angle)
+            end_y = player_center_y + self.light_radius * math.sin(angle)
+            closest_intersection = (end_x, end_y)
+            min_distance = self.light_radius
+
+            for wall_edge in wall_edges:
+                intersection = self._line_intersection(
+                    player_center_x, player_center_y, end_x, end_y,
+                    wall_edge[0][0], wall_edge[0][1],
+                    wall_edge[1][0], wall_edge[1][1]
+                )
+                if intersection:
+                    dist = math.hypot(
+                        intersection[0] - player_center_x,
+                        intersection[1] - player_center_y
+                    )
+                    if dist < min_distance:
+                        closest_intersection = intersection
+                        min_distance = dist
+            light_polygon.append(closest_intersection)
+
+        return light_polygon
+
+    def cast_light(self, screen, player, wall_sprites, camera_offset):
+    # Check if player has moved significantly
+        current_pos = (player.rect.centerx, player.rect.centery)
+
+        if (self.last_player_pos is None or 
+            math.hypot(current_pos[0] - self.last_player_pos[0],
+                       current_pos[1] - self.last_player_pos[1]) > self.movement_threshold):
+
+            # Recalculate light if moved
+            light_surface = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
+            player_center_x = player.rect.centerx - camera_offset[0]
+            player_center_y = player.rect.centery - camera_offset[1]
+            wall_edges = self._get_wall_edges(wall_sprites, camera_offset)
+            light_polygon = self._calculate_light_polygon(player_center_x, player_center_y, wall_edges)
+
+            # Draw light polygon
+            if len(light_polygon) > 2:
+                pygame.draw.polygon(light_surface, self.light_color, light_polygon)
+
+            # Cache the result
+            self.light_cache = light_surface
+            self.last_player_pos = current_pos
+
+
+        # Always blit the cached surface
+        if self.light_cache is not None:
+            screen.blit(self.light_cache, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+
+    def _get_wall_edges(self, wall_sprites, camera_offset):
+        edges = []
+        for wall in wall_sprites:
+            x = wall.rect.x - camera_offset[0]
+            y = wall.rect.y - camera_offset[1]
+            edges.extend([
+                ((x, y), (x + wall.rect.width, y)),
+                ((x + wall.rect.width, y), (x + wall.rect.width, y + wall.rect.height)),
+                ((x, y + wall.rect.height), (x + wall.rect.width, y + wall.rect.height)),
+                ((x, y), (x, y + wall.rect.height))
+            ])
+        return edges
+
+    def _line_intersection(self, x1, y1, x2, y2, x3, y3, x4, y4):
+        denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1)
+        if denom == 0:
+            return None
+        
+        ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom
+        ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom
+
+        if 0 <= ua <= 1 and 0 <= ub <= 1:
+            x = x1 + ua * (x2 - x1)
+            y = y1 + ua * (y2 - y1)
+            return (x, y)
+
+class GameFinish:
+    def __init__(self, x, y):
+        self.Image = pygame.image.load(Dum_Texture).convert_alpha()
+        self.x = x
+        self.y = y
+        self.rect = self.Image.get_rect(topleft=(x, y))
+
+    def Spawn():
+        pass
+    #jen at to vezme pocet bloku v prvni rade a vynasobi to 75 a pak to spawne na ty souradnici
+    
+    def CheckEndGame(self, Hrac):
+        if self.rect.colliderect(Hrac.rect):
+            print("Game END, you escaped")
+            return True
+        return False
+
+class Candle:
+    def __init__(self, x, y):
+        self.source = [x,y]
+        self.particles = []      # [loc, velocity, timer]
+        self.cooldown = 0
+        
+
+    def circleSurface(self, radius, color):
+        surf = pygame.Surface((radius * 2, radius * 2))
+        pygame.draw.circle(surf, color, (radius, radius), radius)
+        surf.set_colorkey((0, 0, 0))
+        return surf
+
+    def createSource(self, player, camera_offset):
+        PosHrac = [player.rect.centerx, player.rect.centery]
+
+        self.cooldown += 1
+
+        #                                   pos      random pohyb do stran      pohyb nahoru    jak budou velky, postupne se zmensujou
+
+        if self.cooldown > 3:
+            self.particles.append([[PosHrac[0], PosHrac[1]], [random.uniform(-0.5, 0.5), -1.8], random.randint(2, 3)])
+            self.cooldown = 0
+
+        for particle in self.particles:
+            particle[0][0] += particle[1][0] #pohyb do stran
+            particle[0][1] += particle[1][1] #pohyb nahoru
+            particle[1][1] += 0.004 #to je pohyb nahoru
+            particle[2] -= 0.03  #to je zmensuje
+            if particle[2] > 0:
+                radius = int(particle[2] * 4)
+                light_surf = self.circleSurface(radius, (255, 193, 0))
+                screen.blit(light_surf, (particle[0][0] - camera_offset[0] - radius, particle[0][1] - camera_offset[1] - radius - 70), special_flags=pygame.BLEND_RGB_ADD)
+            else:
+                self.particles.remove(particle)
+
+class Camera:
+    def __init__(self, target, screen_width, screen_height):
+        self.target = target  # Tohle je sledovanej objekt
+        self.offset = pygame.math.Vector2(0, 0)
+        self.SCREEN_WIDTH = 1280
+        self.SCREEN_HEIGHT = 720
+        
+        #Nastaveni kamery
+        self.LERP_SPEED = 0.1
+        self.DEAD_ZONE_X = 120
+        self.DEAD_ZONE_Y = 200
+
+    def lerp(self, start, end, amount):
+        #pocita ten smoothnes kamery
+        return start + (end - start) * amount
+
+    def update(self):
+        #Updejtuje camera posXY
+        #Vypocitej target pos jako centerXaY hrace
+        target_x = self.target.rect.centerx - self.SCREEN_WIDTH/2
+        target_y = self.target.rect.centery - self.SCREEN_HEIGHT/2
+
+        # Tohle dela smoothing
+        self.offset.x = self.lerp(self.offset.x, target_x, self.LERP_SPEED)
+        self.offset.y = self.lerp(self.offset.y, target_y, self.LERP_SPEED)
+
+    def apply(self, entity):
+        #aplikuje ofset
+        return entity.rect.copy().topleft - self.offset
+
+class Shovel(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.SpawnList = []  # Initialize SpawnList
+        self.Spawn()  #nastavi random spawn
+        self.image = pygame.image.load(Lopata_texture)
+        self.image = pygame.transform.scale(self.image, (50, 50))
+        self.rect = self.image.get_rect(topleft=(self.posX, self.posY))
+        self.durability = 7
+        self.is_held = False
+
+    def Spawn(self):
+        with open(map_file, "r") as map:
+            for i, x in enumerate(map):
+                for j, y in enumerate(x.strip()):
+                    if y == '2':
+                        self.posXY = (j*75, i*75)
+                        self.SpawnList.append(self.posXY)
+
+        if self.SpawnList:
+            self.posX, self.posY = random.choice(self.SpawnList)
+            print(self.posX, self.posY)
+
+    def update(self, player, camera_offset):
+        self.posX -= camera_offset[0]
+        self.posY -= camera_offset[1]
+        if not self.is_held and self.rect.colliderect(player.rect):
+            self.is_held = True
+            return True
+        return False
+
+    def updateCollision(player, shovel_sprite):
+        for shovel in shovel_sprite:
+            # Check if shovel is not already held
+            if not shovel.is_held:
+                # Check collision with player
+                if shovel.rect.colliderect(player.rect):
+                    shovel.is_held = True
+                    player.has_shovel = True  # Add this to player class
+                    return shovel
+
+        return None
+
+    def destroyWalls(self, blocks, player):
+        if not self.is_held or self.durability <= 0:
+            return False
+
+        mouse_pos = pygame.mouse.get_pos()
+        
+        # destroy range podle pozice hrace
+        destroy_range = pygame.Rect(player.rect.centerX - 170, player.rect.centerY - 170, 170, 170)
+        
+        destroyed_blocks = []
+        for block in blocks:
+            if destroy_range.colliderect(block.rect):
+                destroyed_blocks.append(block)
+                if len(destroyed_blocks) > self.durability:
+                    break
+        
+        # Remove destroyed blocks and reduce durability
+        for block in destroyed_blocks:
+            blocks.remove(block)
+        
+        self.durability -= 1
+        return len(destroyed_blocks) > 0
+       
+
+class environmentblock(pygame.sprite.Sprite):
+    def __init__(self, x, y, sirka, vyska, is_background=True):
+        super().__init__()
+        self.pos = pygame.math.Vector2(x, y)
+        self.move = pygame.math.Vector2()
+        self.sirka = sirka
+        self.vyska = vyska
+        self.image = pygame.Surface((self.sirka, self.vyska))
+        self.image.fill((255, 255, 255)) 
+
+        self.OriginalImageBackground = pygame.image.load(Kamen1_Texture)
+        self.BackgroundImage = pygame.transform.scale(self.OriginalImageBackground, (75, 75))
+
+        self.OriginalImage = pygame.image.load(Kamen2_Texture)
+        self.Image = pygame.transform.scale(self.OriginalImage, (75, 75))
+        
+        self.rect = self.image.get_rect(topleft=(round(self.pos.x), round(self.pos.y)))
 
 class character(pygame.sprite.Sprite):
     def __init__(self, x, y, HP, OnGround, CharacterSirka, CharacterVyska):
@@ -62,7 +438,7 @@ class character(pygame.sprite.Sprite):
         self.CharacterVyska = CharacterVyska
 
         #puvodni obrazek
-        self.OriginalImage = pygame.image.load("..\Textury\Character01.png").convert_alpha()
+        self.OriginalImage = pygame.image.load(PLayer_Texture).convert_alpha()
         #load textury a resize pro lezeni a stani
         self.StandingImage = pygame.transform.scale(self.OriginalImage, (70, 150))
         self.CrawlingImage = pygame.transform.rotate(self.OriginalImage, -90)
@@ -81,6 +457,7 @@ class character(pygame.sprite.Sprite):
         self.IsCrawling = False
         self.IsClimbing = False
         self.DivaSeDoprava = True
+        self.has_shovel = False
 
     def update(self, time_passed, blocks):
         self.CanStandUp = True
@@ -194,300 +571,6 @@ class character(pygame.sprite.Sprite):
         if self.IsClimbing and not self.MuzesLezt:
             self.IsClimbing = False
 
-class Quadtree:
-    def __init__(self, bounds, capacity):
-        """
-        Initialize a Quadtree node.
-        :param bounds: A pygame.Rect defining the region.
-        :param capacity: Maximum number of objects before subdivision.
-        """
-        self.bounds = pygame.Rect(bounds)  # Region of this quadtree node
-        self.capacity = capacity           # Max objects before subdivision
-        self.objects = []                  # Objects in this region
-        self.divided = False               # Flag for child nodes existence
-
-    def insert(self, obj):
-        """
-        Insert an object into the quadtree.
-        :param obj: Object with a `rect` property (pygame.Rect).
-        :return: True if successfully inserted, False otherwise.
-        """
-        if not self.bounds.colliderect(obj.rect):
-            return False  # Object not within bounds
-
-        if len(self.objects) < self.capacity and not self.divided:
-            self.objects.append(obj)
-            return True
-
-        if not self.divided:
-            self.subdivide()
-
-        # Try inserting into child nodes
-        return (
-            self.northwest.insert(obj) or
-            self.northeast.insert(obj) or
-            self.southwest.insert(obj) or
-            self.southeast.insert(obj)
-        )
-
-    def subdivide(self):
-        """
-        Split this node into four children (quadrants).
-        """
-        x, y, w, h = self.bounds
-        half_w, half_h = w // 2, h // 2
-
-        self.northwest = Quadtree((x, y, half_w, half_h), self.capacity)
-        self.northeast = Quadtree((x + half_w, y, half_h, half_h), self.capacity)
-        self.southwest = Quadtree((x, y + half_h, half_w, half_h), self.capacity)
-        self.southeast = Quadtree((x + half_w, y + half_h, half_w, half_h), self.capacity)
-        self.divided = True
-
-    def query(self, range_rect, found=None):
-        """
-        Retrieve objects within a given range.
-        :param range_rect: A pygame.Rect defining the query range.
-        :param found: List to accumulate found objects.
-        :return: List of found objects.
-        """
-        if found is None:
-            found = []
-
-        if not self.bounds.colliderect(range_rect):
-            return found  # No overlap with this node
-
-        # Check objects in the current node
-        for obj in self.objects:
-            if range_rect.colliderect(obj.rect):
-                found.append(obj)
-
-        # Query child nodes if they exist
-        if self.divided:
-            self.northwest.query(range_rect, found)
-            self.northeast.query(range_rect, found)
-            self.southwest.query(range_rect, found)
-            self.southeast.query(range_rect, found)
-
-        return found
-
-    def clear(self):
-        """
-        Clear all objects and reset the quadtree.
-        """
-        self.objects.clear()
-        self.divided = False
-        if hasattr(self, 'northwest'):
-            self.northwest.clear()
-            self.northeast.clear()
-            self.southwest.clear()
-            self.southeast.clear()
-
-    def debug_draw(self, surface):
-        """
-        Draw the quadtree bounds for debugging.
-        """
-        pygame.draw.rect(surface, (255, 0, 0), self.bounds, 1)
-        if self.divided:
-            self.northwest.debug_draw(surface)
-            self.northeast.debug_draw(surface)
-            self.southwest.debug_draw(surface)
-            self.southeast.debug_draw(surface)
-
-class LightingSystem:
-    def __init__(self, screen_width, screen_height):
-        self.screen_width = screen_width
-        self.screen_height = screen_height
-        self.light_color = (255, 193, 0, 155)
-        self.light_radius = 250
-        self.ray_count = 15
-
-        # New tracking attributes
-        self.last_player_pos = None
-        self.light_cache = None  # Cached light surface
-        self.movement_threshold = 1  # Pixels of movement to trigger recalculation
-
-    def _calculate_light_polygon(self, player_center_x, player_center_y, wall_edges):
-        light_polygon = []
-        for i in range(self.ray_count):
-            angle = 2 * math.pi * i / self.ray_count
-            end_x = player_center_x + self.light_radius * math.cos(angle)
-            end_y = player_center_y + self.light_radius * math.sin(angle)
-            closest_intersection = (end_x, end_y)
-            min_distance = self.light_radius
-
-            for wall_edge in wall_edges:
-                intersection = self._line_intersection(
-                    player_center_x, player_center_y, end_x, end_y,
-                    wall_edge[0][0], wall_edge[0][1],
-                    wall_edge[1][0], wall_edge[1][1]
-                )
-                if intersection:
-                    dist = math.hypot(
-                        intersection[0] - player_center_x,
-                        intersection[1] - player_center_y
-                    )
-                    if dist < min_distance:
-                        closest_intersection = intersection
-                        min_distance = dist
-            light_polygon.append(closest_intersection)
-
-        return light_polygon
-
-    def cast_light(self, screen, player, wall_sprites, camera_offset):
-    # Check if player has moved significantly
-        current_pos = (player.rect.centerx, player.rect.centery)
-
-        if (self.last_player_pos is None or 
-            math.hypot(current_pos[0] - self.last_player_pos[0],
-                       current_pos[1] - self.last_player_pos[1]) > self.movement_threshold):
-
-            # Recalculate light if moved
-            light_surface = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
-            player_center_x = player.rect.centerx - camera_offset[0]
-            player_center_y = player.rect.centery - camera_offset[1]
-            wall_edges = self._get_wall_edges(wall_sprites, camera_offset)
-            light_polygon = self._calculate_light_polygon(player_center_x, player_center_y, wall_edges)
-
-            # Draw light polygon
-            if len(light_polygon) > 2:
-                pygame.draw.polygon(light_surface, self.light_color, light_polygon)
-
-            # Cache the result
-            self.light_cache = light_surface
-            self.last_player_pos = current_pos
-
-
-        # Always blit the cached surface
-        if self.light_cache is not None:
-            screen.blit(self.light_cache, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
-
-    def _get_wall_edges(self, wall_sprites, camera_offset):
-        edges = []
-        for wall in wall_sprites:
-            x = wall.rect.x - camera_offset[0]
-            y = wall.rect.y - camera_offset[1]
-            edges.extend([
-                ((x, y), (x + wall.rect.width, y)),
-                ((x + wall.rect.width, y), (x + wall.rect.width, y + wall.rect.height)),
-                ((x, y + wall.rect.height), (x + wall.rect.width, y + wall.rect.height)),
-                ((x, y), (x, y + wall.rect.height))
-            ])
-        return edges
-
-    def _line_intersection(self, x1, y1, x2, y2, x3, y3, x4, y4):
-        denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1)
-        if denom == 0:
-            return None
-        
-        ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom
-        ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom
-
-        if 0 <= ua <= 1 and 0 <= ub <= 1:
-            x = x1 + ua * (x2 - x1)
-            y = y1 + ua * (y2 - y1)
-            return (x, y)
-
-class GameFinish:
-    def __init__(self, x, y):
-        self.Image = pygame.image.load("Textury/Domecek.png").convert_alpha()
-        self.x = x
-        self.y = y
-        self.rect = self.Image.get_rect(topleft=(x, y))
-
-    def Spawn():
-        pass
-    #jen at to vezme pocet bloku v prvni rade a vynasobi to 75 a pak to spawne na ty souradnici
-    
-    def CheckEndGame(self, Hrac):
-        if self.rect.colliderect(Hrac.rect):
-            print("Game END, you escaped")
-            return True
-        return False
-
-class Candle:
-    def __init__(self, x, y):
-        self.source = [x,y]
-        self.particles = []      # [loc, velocity, timer]
-        self.cooldown = 0
-        
-
-    def circleSurface(self, radius, color):
-        surf = pygame.Surface((radius * 2, radius * 2))
-        pygame.draw.circle(surf, color, (radius, radius), radius)
-        surf.set_colorkey((0, 0, 0))
-        return surf
-
-    def createSource(self, player, camera_offset):
-        PosHrac = [player.rect.centerx, player.rect.centery]
-
-        self.cooldown += 1
-
-        #                                   pos      random pohyb do stran      pohyb nahoru    jak budou velky, postupne se zmensujou
-
-        if self.cooldown > 3:
-            self.particles.append([[PosHrac[0], PosHrac[1]], [random.uniform(-0.5, 0.5), -1.8], random.randint(2, 3)])
-            self.cooldown = 0
-
-        for particle in self.particles:
-            particle[0][0] += particle[1][0] #pohyb do stran
-            particle[0][1] += particle[1][1] #pohyb nahoru
-            particle[1][1] += 0.004 #to je pohyb nahoru
-            particle[2] -= 0.03  #to je zmensuje
-            if particle[2] > 0:
-                radius = int(particle[2] * 4)
-                light_surf = self.circleSurface(radius, (255, 193, 0))
-                screen.blit(light_surf, (particle[0][0] - camera_offset[0] - radius, particle[0][1] - camera_offset[1] - radius - 70), special_flags=pygame.BLEND_RGB_ADD)
-            else:
-                self.particles.remove(particle)
-
-class Camera:
-    def __init__(self, target, screen_width, screen_height):
-        self.target = target  # Tohle je sledovanej objekt
-        self.offset = pygame.math.Vector2(0, 0)
-        self.SCREEN_WIDTH = 1280
-        self.SCREEN_HEIGHT = 720
-        
-        #Nastaveni kamery
-        self.LERP_SPEED = 0.1
-        self.DEAD_ZONE_X = 120
-        self.DEAD_ZONE_Y = 200
-
-    def lerp(self, start, end, amount):
-        #pocita ten smoothnes kamery
-        return start + (end - start) * amount
-
-    def update(self):
-        #Updejtuje camera posXY
-        #Vypocitej target pos jako centerXaY hrace
-        target_x = self.target.rect.centerx - self.SCREEN_WIDTH/2
-        target_y = self.target.rect.centery - self.SCREEN_HEIGHT/2
-
-        # Tohle dela smoothing
-        self.offset.x = self.lerp(self.offset.x, target_x, self.LERP_SPEED)
-        self.offset.y = self.lerp(self.offset.y, target_y, self.LERP_SPEED)
-
-    def apply(self, entity):
-        #aplikuje ofset
-        return entity.rect.copy().topleft - self.offset
-
-class environmentblock(pygame.sprite.Sprite):
-    def __init__(self, x, y, sirka, vyska, is_background=True):
-        super().__init__()
-        self.pos = pygame.math.Vector2(x, y)
-        self.move = pygame.math.Vector2()
-        self.sirka = sirka
-        self.vyska = vyska
-        self.image = pygame.Surface((self.sirka, self.vyska))
-        self.image.fill((255, 255, 255)) 
-
-        self.OriginalImageBackground = pygame.image.load("..\Textury\Kamen01.png")
-        self.BackgroundImage = pygame.transform.scale(self.OriginalImageBackground, (75, 75))
-
-        self.OriginalImage = pygame.image.load("..\Textury\Podlozi01.png")
-        self.Image = pygame.transform.scale(self.OriginalImage, (75, 75))
-        
-        self.rect = self.image.get_rect(topleft=(round(self.pos.x), round(self.pos.y)))
-
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y, OnGround):
         super().__init__()
@@ -523,7 +606,7 @@ class Enemy(pygame.sprite.Sprite):
         self.jumping = False
 
         #nacteni a nastaveni textury spritu
-        self.OriginalImage = pygame.image.load("..\Textury\Enemy01.png").convert_alpha()
+        self.OriginalImage = pygame.image.load(Enemy_Texture).convert_alpha()
         self.StandingImage = pygame.transform.scale(self.OriginalImage, (300, 100))
         self.image = self.StandingImage
         self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
@@ -706,15 +789,15 @@ def CreateMap():
     CaveRockSprites = pygame.sprite.Group()
     CaveBackgroundSprites = pygame.sprite.Group()
     
-    with open("..\map", "r") as mapp:
+    with open(map_file, "r") as mapp:
         lines = mapp.readlines()
 
-    with open("..\map", "r") as mapp:
+    with open(map_file, "r") as mapp:
         for i, x in enumerate(mapp):
             for j, y in enumerate(x.strip()):
                 if y == '1' or y == '0':
                     CaveRockSprites.add(environmentblock(j*75, i*75, 75, 75))
-                elif y in '2':
+                elif y == '2':
                     CaveBackgroundSprites.add(environmentblock(j*75, i*75, 75, 75))
 
     return CaveRockSprites, CaveBackgroundSprites
@@ -737,8 +820,8 @@ def game_loop(game_state):
         enemy.update(delta_time, game_state.CaveRockSprites)
         enemy.patrol(game_state.player, game_state.CaveRockSprites, game_state.time_passed)
         enemy.killCheck(game_state)
-        
-        # Add this function to your game loop or initialization process
+
+        # init Quadtree
         def initialize_quadtree(map_width, map_height, wall_sprites, capacity=4):
             """
             Initialize and populate the quadtree with wall objects.
@@ -770,8 +853,11 @@ def render_game(game_state):
     
     camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y) #pro svetlo
 
-    #Vykresleni hrace a enemy
+    #Vykresleni hrace a enemy a lopaty
+    game_state.shovel.update(camera_offset)
+
     player = game_state.player
+    print(player.rect.center)
     enemy = game_state.enemy_sprite.sprites()[0]
 
     game_state.screen.blit(player.image, game_state.camera.apply(player))
@@ -780,7 +866,6 @@ def render_game(game_state):
     #vykresleni svetla - candle
     game_state.Candle.createSource(game_state.player, camera_offset)
     #LightSystem
-    camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y)
     game_state.LightingSystem.cast_light(game_state.screen, game_state.player,game_state.CaveRockSprites, camera_offset)
     pygame.display.flip()
 
