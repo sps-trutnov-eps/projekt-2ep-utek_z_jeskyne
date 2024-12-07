@@ -1,11 +1,25 @@
 import pygame
 import random
+import os
 import pygame_light2d as pl2d
 from pygame_light2d import LightingEngine, PointLight, Hull
 from pygame.locals import *
 from pygame import time
 from GameOver import game_over_screen
 pygame.init()
+
+
+file_dir = os.path.dirname(os.path.abspath(__file__)) #absolutni path k tomuto game_engine souboru
+parent_dir = os.path.abspath(os.path.join(file_dir, os.path.pardir)) #tohle pouzije path k tomuto py soboru a jde o jeden level vys a pak do textur a nacte texturu
+map_file = os.path.join(parent_dir, "map")
+Enemy_Texture = os.path.join(parent_dir, "Textury", "Enemy01.png")
+PLayer_Texture = os.path.join(parent_dir, "Textury", "Character01.png")
+Kamen1_Texture = os.path.join(parent_dir, "Textury", "Kamen01.png")
+Kamen2_Texture = os.path.join(parent_dir, "Textury", "Kamen02.png")
+Dum_Texture = os.path.join(parent_dir, "Textury", "Domecek01.png")
+Lopata_texture = os.path.join(parent_dir, "Textury", "Lopata01.png")
+
+
 
 # Screen resolution and lighting engine setup
 screen_res = (1280, 720)
@@ -89,7 +103,7 @@ class character(pygame.sprite.Sprite):
 
 
         # Load the original image as a Pygame surface first to get dimensions
-        self.original_surface = pygame.image.load("Character01.png")
+        self.original_surface = pygame.image.load(PLayer_Texture)
         
         # Create standing and crawling surfaces with proper dimensions
         self.standing_surface = pygame.transform.scale(self.original_surface, (70, 150))
@@ -317,7 +331,7 @@ class environmentblock(pygame.sprite.Sprite):
 
         #####################################################################################################################
         # Load the original image as a Pygame surface first to get dimensions
-        self.original_surface = pygame.image.load("Kamen01.png")
+        self.original_surface = pygame.image.load(Kamen1_Texture)
         
         # Create normal surfaces with proper dimensions
         self.standing_surface = pygame.transform.scale(self.original_surface, (75, 75))
@@ -371,7 +385,7 @@ class Enemy(pygame.sprite.Sprite):
 
 
         # Load and prepare both normal and flipped textures at initialization
-        self.original_surface = pygame.image.load("Enemy01.png")
+        self.original_surface = pygame.image.load(Enemy_Texture)
         self.standing_surface = pygame.transform.scale(self.original_surface, (300, 100))
         self.flipped_surface = pygame.transform.flip(self.standing_surface, True, False)
         
@@ -566,7 +580,7 @@ def initPygame():
 def CreateMap():
     AllCaveSprites = pygame.sprite.Group()
     
-    mapp = open("map", "r")
+    mapp = open(map_file, "r")
 
     for i,x in enumerate(mapp) :
         for j,y in enumerate(x) :
