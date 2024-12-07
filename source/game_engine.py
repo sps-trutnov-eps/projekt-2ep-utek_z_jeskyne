@@ -6,6 +6,7 @@ from pygame.locals import *
 from pygame import draw, time
 from GameOver import game_over_screen
 
+
 file_dir = os.path.dirname(os.path.abspath(__file__)) #absolutni path k tomuto game_engine souboru
 parent_dir = os.path.abspath(os.path.join(file_dir, os.path.pardir)) #tohle pouzije path k tomuto py soboru a jde o jeden level vys a pak do textur a nacte texturu
 map_file = os.path.join(parent_dir, "map")
@@ -26,7 +27,7 @@ COLORS = {
     'WHITE': (255, 255, 255)
 }
 
-def initGame():
+def initGame(difficulty):
     game_state = GameState()
     
     # init Pygame
@@ -36,7 +37,7 @@ def initGame():
     game_state.player = character(1000, 100, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
 
     #lopata
-    game_state.lopata = Shovel(2000, 2000)  # prvni lopata instance, dost daleko aby nebyla videt
+    game_state.lopata = Shovel(300, 100)  # prvni lopata instance, dost daleko aby nebyla videt
     game_state.shovel_sprite = pygame.sprite.GroupSingle()  # Use Group() instead of GroupSingle()
     shovel_spawn = game_state.lopata.SpawnList[0]  # Get the first spawn point
     shovel = Shovel(shovel_spawn[0], shovel_spawn[1])  # Create Shovel at spawn point
@@ -56,10 +57,26 @@ def initGame():
     #Postav mapu, upec chleba
     game_state.CaveRockSprites, game_state.CaveBackgroundSprites = CreateMap()
    
-    #Enemy init, pozdejc jich mozna bude vic
-    enemy = Enemy(300, 0, True)
+    #Enemy init, podle difficulty
     game_state.enemy_sprite = pygame.sprite.Group()
-    game_state.enemy_sprite.add(enemy)
+    enemy_spawn_points = []
+    
+    #Projede veskery mozny spawn pointy
+    #bylo by lepsi aby to tady resilo i lopatu pro lepsi efektivitu, also ale koho to stve jineho nez cestmira
+    #asi 5x se loopuje pres vsechny bloky lmao
+    with open(map_file, "r") as map:
+        for i, x in enumerate(map):
+            for j, y in enumerate(x.strip()):
+                if y == '2':
+                    enemy_spawn_points.append((j*75, i*75))
+    print(difficulty)
+    # Spawn enemies based on difficulty
+    for _ in range(difficulty):
+        if enemy_spawn_points:
+            spawn_point = random.choice(enemy_spawn_points)
+            enemy = Enemy(spawn_point[0], spawn_point[1], True)
+            game_state.enemy_sprite.add(enemy)
+            enemy_spawn_points.remove(spawn_point)
     
     #inicializuj gameclock, kterej se jen stara o to abys mohl hejbat s oknem a nepokazilo to timing
     game_state.game_clock = GameClock(60)
@@ -289,7 +306,7 @@ class Candle:
         surf.set_colorkey((0, 0, 0))
         return surf
 
-    def createSource(self, player, camera_offset):
+    def createSource(self, player, screen, camera_offset):
         PosHrac = [player.rect.centerx, player.rect.centery]
 
         self.cooldown += 1
@@ -308,7 +325,11 @@ class Candle:
             if particle[2] > 0:
                 radius = int(particle[2] * 4)
                 light_surf = self.circleSurface(radius, (255, 193, 0))
-                screen.blit(light_surf, (particle[0][0] - camera_offset[0] - radius, particle[0][1] - camera_offset[1] - radius - 70), special_flags=pygame.BLEND_RGB_ADD)
+                try:
+                    screen.blit(light_surf, (particle[0][0] - camera_offset[0] - radius, particle[0][1] - camera_offset[1] - radius - 70), special_flags=pygame.BLEND_RGB_ADD)
+                except pygame.error:
+                # Handle or log the error
+                    print("Could not blit light surface")
             else:
                 self.particles.remove(particle)
 
@@ -343,10 +364,12 @@ class Camera:
         return entity.rect.copy().topleft - self.offset
 
 class Shovel(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, posX, posY):
         super().__init__()
+        self.posX = posX
+        self.posY = posY
         self.SpawnList = []  # Initialize SpawnList
-        self.Spawn()  #nastavi random spawn
+        self.Spawn()
         self.image = pygame.image.load(Lopata_texture)
         self.image = pygame.transform.scale(self.image, (50, 50))
         self.rect = self.image.get_rect(topleft=(self.posX, self.posY))
@@ -408,7 +431,6 @@ class Shovel(pygame.sprite.Sprite):
         self.durability -= 1
         return len(destroyed_blocks) > 0
        
-
 class environmentblock(pygame.sprite.Sprite):
     def __init__(self, x, y, sirka, vyska, is_background=True):
         super().__init__()
@@ -577,11 +599,11 @@ class Enemy(pygame.sprite.Sprite):
         self.pos = pygame.math.Vector2(x, y)
         self.move = pygame.math.Vector2(200, 0)  #pocatecni rychlost x, jde doprava
         self.OnGround = OnGround
-        self.image = pygame.Surface((150, 50))
+        self.image = pygame.Surface((70, 70))
         self.image.fill((200, 0, 200))
         self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
         self.Speed = 200  #Rychlost pohybu
-        self.CanCPlayer = False # Can see ((c -> [sí] = see)) player
+        self.CanCPlayer = False # Can see player
         self.DivaSeDoprava = False
 
         # Patrol parametry
@@ -607,7 +629,7 @@ class Enemy(pygame.sprite.Sprite):
 
         #nacteni a nastaveni textury spritu
         self.OriginalImage = pygame.image.load(Enemy_Texture).convert_alpha()
-        self.StandingImage = pygame.transform.scale(self.OriginalImage, (300, 100))
+        self.StandingImage = pygame.transform.scale(self.OriginalImage, (70, 70))
         self.image = self.StandingImage
         self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
 
@@ -853,9 +875,7 @@ def render_game(game_state):
     
     camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y) #pro svetlo
 
-    #Vykresleni hrace a enemy a lopaty
-    game_state.shovel.update(camera_offset)
-
+    #Vykresleni hrace a enemy
     player = game_state.player
     print(player.rect.center)
     enemy = game_state.enemy_sprite.sprites()[0]
@@ -863,17 +883,21 @@ def render_game(game_state):
     game_state.screen.blit(player.image, game_state.camera.apply(player))
     game_state.screen.blit(enemy.image, game_state.camera.apply(enemy))
 
+    lopata = game_state.lopata
+    lopata.update(player, camera_offset)
+
     #vykresleni svetla - candle
-    game_state.Candle.createSource(game_state.player, camera_offset)
+    game_state.Candle.createSource(game_state.player, game_state.screen, camera_offset)
     #LightSystem
     game_state.LightingSystem.cast_light(game_state.screen, game_state.player,game_state.CaveRockSprites, camera_offset)
     pygame.display.flip()
 
-def main():
-    game_state = initGame()
+def main(difficulty):
+    game_state = initGame(difficulty)
     game_loop(game_state)
 
     pygame.quit()
 
 if __name__ == "__main__":
-    main()
+    difficulty = random.randint(1,3)
+    main(difficulty)

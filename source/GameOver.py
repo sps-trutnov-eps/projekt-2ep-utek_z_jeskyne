@@ -2,7 +2,6 @@ import pygame
 import sys
 
 def game_over_screen():
-    # Initialize pygame
     pygame.init()
     
     # Set up screen
@@ -17,9 +16,7 @@ def game_over_screen():
     # Render text
     text1 = font.render("Game Over! You lost!", True, white)
     text_rect = text1.get_rect(center=(640, 360))
-    # Render text
-    text2 = font.render("Game Over! You won!", True, white)
-    text_rect = text2.get_rect(center=(640, 360))
+
     
     # Main display loop
     while True:
@@ -33,7 +30,6 @@ def game_over_screen():
         
         # Draw the text
         screen.blit(text1, text_rect)
-        #screen.blit(text2, text_rect)
         
         # Update the display
         pygame.display.flip()
