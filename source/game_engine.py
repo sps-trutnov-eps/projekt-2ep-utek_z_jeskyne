@@ -1,11 +1,24 @@
 import pygame
 import random
+import os
 import pygame_light2d as pl2d
 from pygame_light2d import LightingEngine, PointLight, Hull
 from pygame.locals import *
 from pygame import time
 from GameOver import game_over_screen
 pygame.init()
+
+file_dir = os.path.dirname(os.path.abspath(__file__)) #absolutni path k tomuto game_engine souboru
+parent_dir = os.path.abspath(os.path.join(file_dir, os.path.pardir)) #tohle pouzije path k tomuto py soboru a jde o jeden level vys a pak do textur a nacte texturu
+map_file = os.path.join(parent_dir, "map")
+Enemy_Texture = os.path.join(parent_dir, "Textury", "Enemy01.png")
+PLayer_Texture = os.path.join(parent_dir, "Textury", "Character01.png")
+Kamen1_Texture = os.path.join(parent_dir, "Textury", "Kamen01.png")
+Kamen2_Texture = os.path.join(parent_dir, "Textury", "Kamen02.png")
+Dum_Texture = os.path.join(parent_dir, "Textury", "Domecek01.png")
+Lopata_texture = os.path.join(parent_dir, "Textury", "Lopata01.png")
+
+
 
 # Screen resolution and lighting engine setup
 screen_res = (1280, 720)
@@ -47,6 +60,13 @@ def initGame():
     game_state.HracSprite = pygame.sprite.GroupSingle()
     game_state.HracSprite.add(game_state.player) 
     
+    #lopata
+    game_state.lopata = Shovel(0,0)
+    game_state.shovel_sprite = pygame.sprite.GroupSingle()
+    shovel_spawn = game_state.lopata.SpawnList[0]  # Get the first spawn point
+    shovel = Shovel(0, 0)  # Create Shovel at spawn point
+    game_state.shovel_sprite.add(shovel)  # Add to sprite group
+
     #inicializace svetla
     game_state.Light = Light(game_state.player.rect.centerx, game_state.player.rect.centery)
 
@@ -54,7 +74,7 @@ def initGame():
     game_state.camera = Camera(game_state.player, 1280, 720)
     
     #Postav mapu, upec chleba
-    game_state.AllCaveSprites = CreateMap()
+    game_state.CaveRockSprites, game_state.CaveBackgroundSprites = CreateMap()
     
     #Enemy init, pozdejc jich mozna bude vic
     #TODO: spawn ruzne po mape
@@ -89,7 +109,7 @@ class character(pygame.sprite.Sprite):
 
 
         # Load the original image as a Pygame surface first to get dimensions
-        self.original_surface = pygame.image.load("Character01.png")
+        self.original_surface = pygame.image.load(PLayer_Texture)
         
         # Create standing and crawling surfaces with proper dimensions
         self.standing_surface = pygame.transform.scale(self.original_surface, (70, 150))
@@ -274,6 +294,72 @@ class Light:
         # Update the head light position
         self.head_light.position = (head_x, head_y)
 
+class Shovel(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.SpawnList = []  # Initialize SpawnList
+        self.Spawn()  #nastavi random spawn
+        self.image = pygame.image.load(Lopata_texture)
+        self.image = pygame.transform.scale(self.image, (50, 50))
+        self.rect = self.image.get_rect(topleft=(self.posX, self.posY))
+        self.durability = 7
+        self.is_held = False
+
+    def Spawn(self):
+        with open(map_file, "r") as map:
+            for i, x in enumerate(map):
+                for j, y in enumerate(x.strip()):
+                    if y == '2':
+                        self.posXY = (j*75, i*75)
+                        self.SpawnList.append(self.posXY)
+
+        if self.SpawnList:
+            self.posX, self.posY = random.choice(self.SpawnList)
+            print(self.posX, self.posY)
+
+    def update(self, player, camera_offset):
+        self.posX -= camera_offset[0]
+        self.posY -= camera_offset[1]
+        if not self.is_held and self.rect.colliderect(player.rect):
+            self.is_held = True
+            return True
+        return False
+
+    def updateCollision(player, shovel_sprite):
+        for shovel in shovel_sprite:
+            # Check if shovel is not already held
+            if not shovel.is_held:
+                # Check collision with player
+                if shovel.rect.colliderect(player.rect):
+                    shovel.is_held = True
+                    player.has_shovel = True  # Add this to player class
+                    return shovel
+
+        return None
+
+    def destroyWalls(self, blocks, player):
+        if not self.is_held or self.durability <= 0:
+            return False
+
+        mouse_pos = pygame.mouse.get_pos()
+        
+        # destroy range podle pozice hrace
+        destroy_range = pygame.Rect(player.rect.centerX - 170, player.rect.centerY - 170, 170, 170)
+        
+        destroyed_blocks = []
+        for block in blocks:
+            if destroy_range.colliderect(block.rect):
+                destroyed_blocks.append(block)
+                if len(destroyed_blocks) > self.durability:
+                    break
+        
+        # Remove destroyed blocks and reduce durability
+        for block in destroyed_blocks:
+            blocks.remove(block)
+        
+        self.durability -= 1
+        return len(destroyed_blocks) > 0
+       
 
 class Camera:
     def __init__(self, target, screen_width, screen_height):
@@ -315,24 +401,33 @@ class environmentblock(pygame.sprite.Sprite):
         self.image = pygame.Surface((self.sirka, self.vyska))
         self.image.fill((255, 255, 255)) 
 
-        #####################################################################################################################
         # Load the original image as a Pygame surface first to get dimensions
-        self.original_surface = pygame.image.load("Kamen01.png")
+        self.original_surface1 = pygame.image.load(Kamen1_Texture) #svetly kamen
+        self.original_surface2 = pygame.image.load(Kamen2_Texture) #bedrock
         
         # Create normal surfaces with proper dimensions
-        self.standing_surface = pygame.transform.scale(self.original_surface, (75, 75))
+        self.normal_surface1 = pygame.transform.scale(self.original_surface1, (75, 75))
+        self.normal_surface2 = pygame.transform.scale(self.original_surface2, (75, 75))
         
         # Convert surfaces to textures
-        self.NormalImage = lights_engine.surface_to_texture(self.standing_surface)
+        self.NormalImage1 = lights_engine.surface_to_texture(self.normal_surface1)
+        self.NormalImage2 = lights_engine.surface_to_texture(self.normal_surface1)
         
         # Set initial image and create rect with correct dimensions
-        self.current_surface = self.standing_surface  # Keep track of current surface for dimensions
-        self.image = self.NormalImage  # Current texture for rendering
+         # Keep track of current surface for dimensions
+        self.image1 = self.NormalImage1  # Current texture for rendering
         self.rect = pygame.Rect(
-            round(self.pos.x), 
+            round(self.pos.x),
             round(self.pos.y),
-            self.current_surface.get_width(),
-            self.current_surface.get_height()
+            self.normal_surface1.get_width(),
+            self.normal_surface1.get_height()
+        )
+        self.image2 = self.NormalImage2  # Current texture for rendering
+        self.rect = pygame.Rect(
+            round(self.pos.x),
+            round(self.pos.y),
+            self.normal_surface2.get_width(),
+            self.normal_surface2.get_height()
         )
 
 class Enemy(pygame.sprite.Sprite):
@@ -371,7 +466,7 @@ class Enemy(pygame.sprite.Sprite):
 
 
         # Load and prepare both normal and flipped textures at initialization
-        self.original_surface = pygame.image.load("Enemy01.png")
+        self.original_surface = pygame.image.load(Enemy_Texture)
         self.standing_surface = pygame.transform.scale(self.original_surface, (300, 100))
         self.flipped_surface = pygame.transform.flip(self.standing_surface, True, False)
         
@@ -564,16 +659,21 @@ def initPygame():
     return screen, clock
 
 def CreateMap():
-    AllCaveSprites = pygame.sprite.Group()
+    CaveRockSprites = pygame.sprite.Group()
+    CaveBackgroundSprites = pygame.sprite.Group()
     
-    mapp = open("map", "r")
+    with open(map_file, "r") as mapp:
+        lines = mapp.readlines()
 
-    for i,x in enumerate(mapp) :
-        for j,y in enumerate(x) :
-            if y!='2' :
-                AllCaveSprites.add(environmentblock(j*75,i*75,75,75))
+    with open(map_file, "r") as mapp:
+        for i, x in enumerate(mapp):
+            for j, y in enumerate(x.strip()):
+                if y == '1' or y == '0':
+                    CaveRockSprites.add(environmentblock(j*75, i*75, 75, 75))
+                elif y == '2':
+                    CaveBackgroundSprites.add(environmentblock(j*75, i*75, 75, 75))
 
-    return AllCaveSprites
+    return CaveRockSprites, CaveBackgroundSprites
 
 def game_loop(game_state):
     while game_state.running:
@@ -587,12 +687,12 @@ def game_loop(game_state):
 
         # Vsechny updaty
         game_state.camera.update()
-        game_state.player.update(delta_time, game_state.AllCaveSprites)
+        game_state.player.update(delta_time, game_state.CaveRockSprites)
 
         
         enemy = game_state.enemy_sprite.sprites()[0]
-        enemy.update(delta_time, game_state.AllCaveSprites)
-        enemy.patrol(game_state.player, game_state.AllCaveSprites, game_state.time_passed)
+        enemy.update(delta_time, game_state.CaveRockSprites)
+        enemy.patrol(game_state.player, game_state.CaveRockSprites, game_state.time_passed)
         enemy.killCheck(game_state)
         
         #Vykreslovani - renderovani
@@ -603,14 +703,24 @@ def render_game(game_state):
     lights_engine.clear(0, 0, 0, 255)
     
     #Vykresleni bloku 
-    for sprite in game_state.AllCaveSprites:
+
+    # sprite = environmentblock()
+    # for x in range(18):
+    #     pos = game_state.camera.apply(sprite)
+    #     for y in range(11):
+    #         dest_rect = pygame.Rect(pos[0] + 75 * x, pos[1] + 75 * y, sprite.rect.width, sprite.rect.height)
+    #         source_rect = pygame.Rect(0, 0, sprite.rect.width, sprite.rect.height)
+    #         lights_engine.render_texture(sprite.NormalImage2, pl2d.BACKGROUND, dest_rect, source_rect)
+
+
+    for sprite in game_state.CaveRockSprites:
         pos = game_state.camera.apply(sprite)
         if pos[0] > -75 and pos[0]<1280 and pos[1]>-75 and pos[1] <720:
             # musis pridat destinaci a zdroj kazdymu rectu
             # Convert tuples to pygame.Rect objects
             dest_rect = pygame.Rect(pos[0], pos[1], sprite.rect.width, sprite.rect.height)
             source_rect = pygame.Rect(0, 0, sprite.rect.width, sprite.rect.height)
-            lights_engine.render_texture(sprite.NormalImage, pl2d.BACKGROUND, dest_rect, source_rect)
+            lights_engine.render_texture(sprite.NormalImage1, pl2d.BACKGROUND, dest_rect, source_rect)
 
     
     camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y) #pro svetlo na svicce
@@ -628,6 +738,12 @@ def render_game(game_state):
     enemy_dest = pygame.Rect(enemy_pos[0], enemy_pos[1], enemy.rect.width, enemy.rect.height)
     enemy_source = pygame.Rect(0, 0, enemy.rect.width, enemy.rect.height)
     lights_engine.render_texture(enemy.image, pl2d.BACKGROUND, enemy_dest, enemy_source)
+
+
+    lopata = game_state.shovel_sprite.sprites()[0]
+    lopata.update(player, camera_offset)
+
+
 
     #Update pozice Light
     game_state.Light.createSource(game_state.player, camera_offset)
