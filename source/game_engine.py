@@ -3,11 +3,8 @@ import random
 import os
 import pygame_light2d as pl2d
 from pygame_light2d import LightingEngine, PointLight, Hull
-from pygame.locals import *
 from pygame import draw, time
 from GameOver import game_over_screen
-pygame.init()
-
 
 file_dir = os.path.dirname(os.path.abspath(__file__)) #absolutni path k tomuto game_engine souboru
 parent_dir = os.path.abspath(os.path.join(file_dir, os.path.pardir)) #tohle pouzije path k tomuto py soboru a jde o jeden level vys a pak do textur a nacte texturu
@@ -19,8 +16,15 @@ Kamen2_Texture = os.path.join(parent_dir, "Textury", "Kamen02.png")
 Dum_Texture = os.path.join(parent_dir, "Textury", "Domecek01.png")
 Lopata_texture = os.path.join(parent_dir, "Textury", "Lopata01.png")
 
-
+pygame.init()
 screen = pygame.display.set_mode((1280, 720))
+
+lights_engine = LightingEngine(
+    screen_res=(1280, 720),  # Replace with your screen width and height
+    native_res=(1280, 720),  # Often same as screen resolution
+    lightmap_res=(1280, 720)  # Often same as screen resolution
+)
+
 COLORS = {
     'RED': (255, 0, 0),
     'GREEN': (0, 255, 0),
@@ -55,7 +59,11 @@ def initGame(difficulty):
     
     #inicializace svicky a svetla s mapou bloku
     game_state.Candle = Candle(game_state.player.rect.centerx, game_state.player.rect.centery)
-    game_state.LightingSystem = LightingSystem(1280, 720)
+    game_state.LightingSystem = LightingEngine(
+                                screen_res=(1280, 720),     # Screen resolution
+                                native_res=(1280, 720),     # Native game resolution
+                                lightmap_res=(1280, 720)    # Lightmap resolution
+                            )
 
     #Inicializace Kamery
     game_state.camera = Camera(game_state.player, 1280, 720)
@@ -89,7 +97,7 @@ def initGame(difficulty):
     
     return game_state
 
-class Quadtree:
+
     def __init__(self, bounds, capacity):
         """
         Initialize a Quadtree node.
@@ -187,100 +195,6 @@ class Quadtree:
             self.northeast.debug_draw(surface)
             self.southwest.debug_draw(surface)
             self.southeast.debug_draw(surface)
-
-class LightingSystem:
-    def __init__(self, screen_width, screen_height):
-        self.screen_width = screen_width
-        self.screen_height = screen_height
-        self.light_color = (255, 193, 0, 155)
-        self.light_radius = 250
-        self.ray_count = 15
-
-        # New tracking attributes
-        self.last_player_pos = None
-        self.light_cache = None  # Cached light surface
-        self.movement_threshold = 100000  # Pixels of movement to trigger recalculation
-
-    def _calculate_light_polygon(self, player_center_x, player_center_y, wall_edges):
-        light_polygon = []
-        for i in range(self.ray_count):
-            angle = 2 * math.pi * i / self.ray_count
-            end_x = player_center_x + self.light_radius * math.cos(angle)
-            end_y = player_center_y + self.light_radius * math.sin(angle)
-            closest_intersection = (end_x, end_y)
-            min_distance = self.light_radius
-
-            for wall_edge in wall_edges:
-                intersection = self._line_intersection(
-                    player_center_x, player_center_y, end_x, end_y,
-                    wall_edge[0][0], wall_edge[0][1],
-                    wall_edge[1][0], wall_edge[1][1]
-                )
-                if intersection:
-                    dist = math.hypot(
-                        intersection[0] - player_center_x,
-                        intersection[1] - player_center_y
-                    )
-                    if dist < min_distance:
-                        closest_intersection = intersection
-                        min_distance = dist
-            light_polygon.append(closest_intersection)
-
-        return light_polygon
-
-    def cast_light(self, screen, player, wall_sprites, camera_offset):
-    # Check if player has moved significantly
-        current_pos = (player.rect.centerx, player.rect.centery)
-
-        if (self.last_player_pos is None or 
-            math.hypot(current_pos[0] - self.last_player_pos[0],
-                       current_pos[1] - self.last_player_pos[1]) > self.movement_threshold):
-
-            # Recalculate light if moved
-            light_surface = pygame.Surface((self.screen_width, self.screen_height), pygame.SRCALPHA)
-            player_center_x = player.rect.centerx - camera_offset[0]
-            player_center_y = player.rect.centery - camera_offset[1]
-            wall_edges = self._get_wall_edges(wall_sprites, camera_offset)
-            light_polygon = self._calculate_light_polygon(player_center_x, player_center_y, wall_edges)
-
-            # Draw light polygon
-            if len(light_polygon) > 2:
-                pygame.draw.polygon(light_surface, self.light_color, light_polygon)
-
-            # Cache the result
-            self.light_cache = light_surface
-            self.last_player_pos = current_pos
-
-
-        # Always blit the cached surface
-        if self.light_cache is not None:
-            screen.blit(self.light_cache, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
-
-    def _get_wall_edges(self, wall_sprites, camera_offset):
-        edges = []
-        for wall in wall_sprites:
-            x = wall.rect.x - camera_offset[0]
-            y = wall.rect.y - camera_offset[1]
-            edges.extend([
-                ((x, y), (x + wall.rect.width, y)),
-                ((x + wall.rect.width, y), (x + wall.rect.width, y + wall.rect.height)),
-                ((x, y + wall.rect.height), (x + wall.rect.width, y + wall.rect.height)),
-                ((x, y), (x, y + wall.rect.height))
-            ])
-        return edges
-
-    def _line_intersection(self, x1, y1, x2, y2, x3, y3, x4, y4):
-        denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1)
-        if denom == 0:
-            return None
-        
-        ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom
-        ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom
-
-        if 0 <= ua <= 1 and 0 <= ub <= 1:
-            x = x1 + ua * (x2 - x1)
-            y = y1 + ua * (y2 - y1)
-            return (x, y)
 
 class GameFinish:
     def __init__(self, x, y):
@@ -437,24 +351,6 @@ class Shovel(pygame.sprite.Sprite):
         self.durability -= 1
         return len(destroyed_blocks) > 0
        
-class environmentblock(pygame.sprite.Sprite):
-    def __init__(self, x, y, sirka, vyska, is_background=True):
-        super().__init__()
-        self.pos = pygame.math.Vector2(x, y)
-        self.move = pygame.math.Vector2()
-        self.sirka = sirka
-        self.vyska = vyska
-        self.image = pygame.Surface((self.sirka, self.vyska))
-        self.image.fill((255, 255, 255)) 
-
-        self.OriginalImageBackground = pygame.image.load(Kamen1_Texture)
-        self.BackgroundImage = pygame.transform.scale(self.OriginalImageBackground, (75, 75))
-
-        self.OriginalImage = pygame.image.load(Kamen2_Texture)
-        self.Image = pygame.transform.scale(self.OriginalImage, (75, 75))
-        
-        self.rect = self.image.get_rect(topleft=(round(self.pos.x), round(self.pos.y)))
-
 class character(pygame.sprite.Sprite):
     def __init__(self, x, y, HP, OnGround, CharacterSirka, CharacterVyska):
         super().__init__()
@@ -464,17 +360,6 @@ class character(pygame.sprite.Sprite):
         self.OnGround = OnGround
         self.CharacterSirka = CharacterSirka
         self.CharacterVyska = CharacterVyska
-
-        #puvodni obrazek
-        self.OriginalImage = pygame.image.load(PLayer_Texture).convert_alpha()
-        #load textury a resize pro lezeni a stani
-        self.StandingImage = pygame.transform.scale(self.OriginalImage, (70, 150))
-        self.CrawlingImage = pygame.transform.rotate(self.OriginalImage, -90)
-        self.CrawlingImage = pygame.transform.scale(self.CrawlingImage, (150, 70))
-
-        #Toto je zacatecni image
-        self.image = self.StandingImage
-        self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
 
         #staty a stavy
         self.cooldown = 0   #Cooldown mezi zmenenim stavu (stani/plazeni)
@@ -492,7 +377,7 @@ class character(pygame.sprite.Sprite):
         self.original_surface = pygame.image.load(PLayer_Texture)
         
         # Create standing and crawling surfaces with proper dimensions
-        self.standing_surface = pygame.transform.scale(self.original_surface, (70, 150))
+        self.standing_surface = pygame.transform.scale(self.original_surface, (75, 150))
         self.crawling_surface = pygame.transform.scale(self.original_surface, (75, 75)) #lmao udelej z nej ctverec a vleze se vsude
         self.flipped_surface = pygame.transform.flip(self.standing_surface, True, False)
         
@@ -541,7 +426,7 @@ class character(pygame.sprite.Sprite):
         #Tohle handeluje zmenu mezi stanim a plazenim i s texturama
         if pressed[pygame.K_LCTRL] and self.cooldown <= 0:
             if not self.IsCrawling:  #Zmeni se na plazeni
-                self.CharacterSirka, self.CharacterVyska = 150, 50
+                self.CharacterSirka, self.CharacterVyska = 75, 75
                 self.GroundSpeed = 70
                 self.IsCrawling = True
                 #Textura handeling
@@ -555,7 +440,7 @@ class character(pygame.sprite.Sprite):
                     self.pos.y
                 ) 
             elif self.IsCrawling and self.CanStandUp:  #Zmena na postaveni, pokud ma nad sebou misto
-                self.CharacterSirka, self.CharacterVyska = 50, 150
+                self.CharacterSirka, self.CharacterVyska = 75, 150
                 self.GroundSpeed = 250
                 self.IsCrawling = False
                 #Textura handeling, stejne jako vyse
@@ -590,7 +475,7 @@ class character(pygame.sprite.Sprite):
 
         # Skakani
         if pressed[pygame.K_UP] and self.OnGround and not self.IsClimbing:
-            self.vel.y = -1135 if not self.IsCrawling else 0 #tady nevim, asi odstranit skakani na zemi uplne?
+            self.vel.y = -1135 if not self.IsCrawling else 0 #skakani nelze behem krceni
             self.OnGround = False  #Nastavi okamzite ze nejsi na zemi
 
         #lezeni
@@ -650,7 +535,6 @@ class character(pygame.sprite.Sprite):
         if self.IsClimbing and not self.MuzesLezt:
             self.IsClimbing = False
 
-
 class Light:
     def __init__(self, x, y):
         self.head_light = PointLight(
@@ -674,65 +558,42 @@ class Light:
         # Update the head light position
         self.head_light.position = (head_x, head_y)
 
-
-class Camera:
-    def __init__(self, target, screen_width, screen_height):
-        self.target = target  # Tohle je sledovanej objekt
-        self.offset = pygame.math.Vector2(0, 0)
-        self.SCREEN_WIDTH = 1280
-        self.SCREEN_HEIGHT = 720
-
-        #Nastaveni kamery
-        self.LERP_SPEED = 0.1
-        self.DEAD_ZONE_X = 120
-        self.DEAD_ZONE_Y = 200
-
-    def lerp(self, start, end, amount):
-        #pocita ten smoothnes kamery
-        return start + (end - start) * amount
-
-    def update(self):
-        #Updejtuje camera posXY
-        #Vypocitej target pos jako centerXaY hrace
-        target_x = self.target.rect.centerx - self.SCREEN_WIDTH/2
-        target_y = self.target.rect.centery - self.SCREEN_HEIGHT/2
-
-        # Tohle dela smoothing
-        self.offset.x = self.lerp(self.offset.x, target_x, self.LERP_SPEED)
-        self.offset.y = self.lerp(self.offset.y, target_y, self.LERP_SPEED)
-        
-    def apply(self, entity):
-        #aplikuje ofset
-        return entity.rect.copy().topleft - self.offset
-
 class environmentblock(pygame.sprite.Sprite):
-    def __init__(self, x, y, sirka, vyska):
+    def __init__(self, x, y, sirka, vyska, is_background=True):
         super().__init__()
         self.pos = pygame.math.Vector2(x, y)
-        self.move = pygame.math.Vector2()
         self.sirka = sirka
         self.vyska = vyska
         self.image = pygame.Surface((self.sirka, self.vyska))
         self.image.fill((255, 255, 255)) 
-
-        #####################################################################################################################
+       
         # Load the original image as a Pygame surface first to get dimensions
-        self.original_surface = pygame.image.load(Kamen1_Texture)
+        self.original_surface1 = pygame.image.load(Kamen1_Texture) #svetly kamen
+        self.original_surface2 = pygame.image.load(Kamen2_Texture) #bedrock
         
         # Create normal surfaces with proper dimensions
-        self.standing_surface = pygame.transform.scale(self.original_surface, (75, 75))
+        self.normal_surface1 = pygame.transform.scale(self.original_surface1, (75, 75))
+        self.normal_surface2 = pygame.transform.scale(self.original_surface2, (75, 75))
         
         # Convert surfaces to textures
-        self.NormalImage = lights_engine.surface_to_texture(self.standing_surface)
+        self.NormalImage1 = lights_engine.surface_to_texture(self.normal_surface1)
+        self.NormalImage2 = lights_engine.surface_to_texture(self.normal_surface1)
         
         # Set initial image and create rect with correct dimensions
-        self.current_surface = self.standing_surface  # Keep track of current surface for dimensions
-        self.image = self.NormalImage  # Current texture for rendering
+         # Keep track of current surface for dimensions
+        self.image1 = self.NormalImage1  # Current texture for rendering
         self.rect = pygame.Rect(
-            round(self.pos.x), 
+            round(self.pos.x),
             round(self.pos.y),
-            self.current_surface.get_width(),
-            self.current_surface.get_height()
+            self.normal_surface1.get_width(),
+            self.normal_surface1.get_height()
+        )
+        self.image2 = self.NormalImage2  # Current texture for rendering
+        self.rect = pygame.Rect(
+            round(self.pos.x),
+            round(self.pos.y),
+            self.normal_surface2.get_width(),
+            self.normal_surface2.get_height()
         )
 
 class Enemy(pygame.sprite.Sprite):
@@ -1029,15 +890,15 @@ def render_game(game_state):
             # Convert tuples to pygame.Rect objects
             dest_rect = pygame.Rect(pos[0], pos[1], sprite.rect.width, sprite.rect.height)
             source_rect = pygame.Rect(0, 0, sprite.rect.width, sprite.rect.height)
-            lights_engine.render_texture(sprite.NormalImage, pl2d.BACKGROUND, dest_rect, source_rect)
+            lights_engine.render_texture(sprite.NormalImage1, pl2d.BACKGROUND, dest_rect, source_rect)
         if pos[0] > -75 and pos[0] < 1280 and pos[1] > -75 and pos[1] < 720:
-            game_state.screen.blit(sprite.BackgroundImage, pos)
+            game_state.screen.blit(sprite.normal_surface1, pos)
     
     # Render rock sprites on top of background
     for sprite in game_state.CaveRockSprites:
         pos = game_state.camera.apply(sprite)
         if pos[0] > -75 and pos[0] < 1280 and pos[1] > -75 and pos[1] < 720:
-            game_state.screen.blit(sprite.Image, pos)
+            game_state.screen.blit(sprite.normal_surface2, pos)
 
     
     camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y) #pro svetlo na svicce
@@ -1055,21 +916,14 @@ def render_game(game_state):
     enemy_dest = pygame.Rect(enemy_pos[0], enemy_pos[1], enemy.rect.width, enemy.rect.height)
     enemy_source = pygame.Rect(0, 0, enemy.rect.width, enemy.rect.height)
     lights_engine.render_texture(enemy.image, pl2d.BACKGROUND, enemy_dest, enemy_source)
-
-    #Update pozice Light
-    game_state.Light.createSource(game_state.player, camera_offset)
-    
-    # Render lights
-
-    lights_engine.render()
     
     lopata = game_state.lopata
     lopata.update(player, camera_offset)
 
     #vykresleni svetla - candle
     game_state.Candle.createSource(game_state.player, game_state.screen, camera_offset)
-    #LightSystem
-    game_state.LightingSystem.cast_light(game_state.screen, game_state.player,game_state.CaveRockSprites, camera_offset)
+    
+    lights_engine.render()
     pygame.display.flip()
 
 def main(difficulty):
