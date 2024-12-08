@@ -1,8 +1,10 @@
 ﻿import math
+import random
 import pygame
 import cas
+import sys
 #import threading
-ds = (50,50)
+ds = (int(sys.argv[1]),int(sys.argv[2]))
 res = (720,900)
 const = min(res[0]/ds[0],res[1]/ds[1])
 mapg = cas.MapGrid(ds)
@@ -23,7 +25,7 @@ def vhard(x,y,vec, r = 5, hd=True, bid = -1) : #Pamatovat že je to programovan�
 		up = (1 if 90/2**i < p_angle else 0)
 		res = bres + up
 		bres = res
-		if up : #hihi hehe pokud int
+		if up : 
 			p_angle-= 90/2**i
 		try :
 			if bid != -1 :
@@ -44,6 +46,8 @@ class kapka :
 		self.pref = pygame.Vector2(0,-1)
 	def mpos(self) :
 		self.pref += pygame.Vector2(0,-0.7)
+		#self.pref += pygame.Vector2((ds[0]/2-self.pref.x)/100,0)
+		#self.pref.x+=(ds[0]/2-self.pref.x)/100
 		m = 0
 		for i in vecs :
 			if vhard(self.x,self.y,self.pref.rotate(m)) > vhard(self.x,self.y,self.pref.rotate(i)) : #5 def r
@@ -61,6 +65,10 @@ def savemap(map) :
 		fmap.write(buffer+"\n")
 pygame.init()
 kapky = []
+for x in range(math.floor((29*(ds[0]*ds[1]))/6000)) :
+	kapky.append(kapka((random.randint(0,ds[0]),random.randint(0, ds[1]-15))))
+for x in range(math.floor(5*(ds[0]*ds[1])/6000) +2) :
+	kapky.append(kapka((random.randint(0,ds[0]),ds[1]-1)))
 screen = pygame.display.set_mode(res)
 running = True
 font = pygame.font.SysFont("", 25)
@@ -87,7 +95,8 @@ while running :
 		kapky.append(kapka((int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const),int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const))))
 	if pygame.mouse.get_pressed()[1] :
 		kapky = []
-	screen.blit(font.render(str(len(kapky)), False,(255, 0,0)), pygame.mouse.get_pos()) 
+	#screen.blit(font.render(str(len(kapky)), False,(255, 0,0)), pygame.mouse.get_pos()) 
+	screen.blit(font.render(str(int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const)) + "  " + str(int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const)), False,(255, 0,0)), pygame.mouse.get_pos()) 
 	#str(int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const)) + "  " + str(int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const)) ##Coords na debug
 	pygame.display.flip()	
 if input("Save? Y/N").upper() == 'Y' :
