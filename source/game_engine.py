@@ -1,13 +1,16 @@
 import pygame
 import random
-import os
+import os, sys
 import pygame_light2d as pl2d
 from pygame_light2d import LightingEngine, PointLight, Hull
 from pygame import draw, time
 from GameOver import game_over_screen
 
+
+difficulty = int(sys.argv[1])
+
 file_dir = os.path.dirname(os.path.abspath(__file__)) #absolutni path k tomuto game_engine souboru
-parent_dir = os.path.abspath(os.path.join(file_dir, os.path.pardir)) #tohle pouzije path k tomuto py soboru a jde o jeden level vys a pak do textur a nacte texturu
+parent_dir = os.path.abspath(os.path.join(file_dir, os.path.pardir)) #tohle pouzije path k tomuto py soboru a jde o jeden level vys
 map_file = os.path.join(parent_dir, "map")
 Enemy_Texture = os.path.join(parent_dir, "Textury", "Enemy01.png")
 PLayer_Texture = os.path.join(parent_dir, "Textury", "Character01.png")
@@ -18,6 +21,8 @@ Lopata_texture = os.path.join(parent_dir, "Textury", "Lopata01.png")
 
 pygame.init()
 screen = pygame.display.set_mode((1280, 720))
+
+
 
 lights_engine = LightingEngine(
     screen_res=(1280, 720),  # Replace with your screen width and height
