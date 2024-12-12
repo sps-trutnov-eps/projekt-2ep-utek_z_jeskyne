@@ -6,12 +6,10 @@ from pygame_light2d import LightingEngine, PointLight, Hull
 from pygame import draw, time
 from GameOver import game_over_screen
 
-
-difficulty = int(sys.argv[1])
-
 file_dir = os.path.dirname(os.path.abspath(__file__)) #absolutni path k tomuto game_engine souboru
 parent_dir = os.path.abspath(os.path.join(file_dir, os.path.pardir)) #tohle pouzije path k tomuto py soboru a jde o jeden level vys
 map_file = os.path.join(parent_dir, "map")
+difficulty_file = os.path.join(file_dir, "diff")
 Enemy_Texture = os.path.join(parent_dir, "Textury", "Enemy01.png")
 PLayer_Texture = os.path.join(parent_dir, "Textury", "Character01.png")
 Kamen1_Texture = os.path.join(parent_dir, "Textury", "Kamen01.png")
@@ -19,10 +17,18 @@ Kamen2_Texture = os.path.join(parent_dir, "Textury", "Kamen02.png")
 Dum_Texture = os.path.join(parent_dir, "Textury", "Domecek01.png")
 Lopata_texture = os.path.join(parent_dir, "Textury", "Lopata01.png")
 
+try:
+    with open(difficulty_file, "r") as file:
+        difficulty = int(file.read().strip())
+except FileNotFoundError:
+    print("Error: Difficulty file not found. Using default difficulty.")
+    difficulty = 1  # Default difficulty in case of an error
+except ValueError:
+    print("Error: Invalid difficulty value in the file. Using default difficulty.")
+    difficulty = 1
+
 pygame.init()
 screen = pygame.display.set_mode((1280, 720))
-
-
 
 lights_engine = LightingEngine(
     screen_res=(1280, 720),  # Replace with your screen width and height
