@@ -5,8 +5,6 @@ import cas
 import sys
 #import threading
 ds = (int(sys.argv[1]),int(sys.argv[2]))
-res = (720,900)
-const = min(res[0]/ds[0],res[1]/ds[1])
 mapg = cas.MapGrid(ds)
 mapg.map = mapg._generate_outside_terrain(mapg.map, 4) # zatím jen 0 a 1, mají přidružené k tomu ještě tvrdost kvůli budoucím materiálům
 
@@ -46,8 +44,6 @@ class kapka :
 		self.pref = pygame.Vector2(0,-1)
 	def mpos(self) :
 		self.pref += pygame.Vector2(0,-0.7)
-		#self.pref += pygame.Vector2((ds[0]/2-self.pref.x)/100,0)
-		#self.pref.x+=(ds[0]/2-self.pref.x)/100
 		m = 0
 		for i in vecs :
 			if vhard(self.x,self.y,self.pref.rotate(m)) > vhard(self.x,self.y,self.pref.rotate(i)) : #5 def r
@@ -63,23 +59,14 @@ def savemap(map) :
 		for y in x :
 			buffer+=str(y) # kašleme na +',' 
 		fmap.write(buffer+"\n")
-pygame.init()
 kapky = []
 for x in range(math.floor((29*(ds[0]*ds[1]))/6000)) :
 	kapky.append(kapka((random.randint(0,ds[0]),random.randint(0, ds[1]-15))))
 for x in range(math.floor(5*(ds[0]*ds[1])/6000) +2) :
 	kapky.append(kapka((random.randint(0,ds[0]),ds[1]-1)))
-screen = pygame.display.set_mode(res)
-running = True
-font = pygame.font.SysFont("", 25)
-while running :
-	screen.fill((0,0,0))
-	for event in pygame.event.get():
-		if event.type == pygame.QUIT:
-			running = False
-	for i,x in enumerate(mapg.map) :
-		for j,y in enumerate(x) :
-			pygame.draw.rect(screen, hcol[y], (i*const+(res[0]-ds[0]*const)/2,res[1]-j*const-(res[1]-ds[1]*const)/2,math.ceil(const),math.ceil(const)))
+for i in range(1000) :
+	if len(kapky) == 0 : 
+		break
 	for x in kapky :
 		if x.x > ds[0] or x.x < 0 or x.y > ds[1] or x.y < 0:
 			kapky.remove(x)
@@ -91,14 +78,9 @@ while running :
 			kapky.remove(x)
 			del x
 			continue
-	if pygame.mouse.get_pressed()[0] :
-		kapky.append(kapka((int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const),int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const))))
-	if pygame.mouse.get_pressed()[1] :
-		kapky = []
-	#screen.blit(font.render(str(len(kapky)), False,(255, 0,0)), pygame.mouse.get_pos()) 
-	screen.blit(font.render(str(int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const)) + "  " + str(int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const)), False,(255, 0,0)), pygame.mouse.get_pos()) 
-	#str(int((pygame.mouse.get_pos()[0]-(res[0]-ds[0]*const)/2)/const)) + "  " + str(int((res[1]-pygame.mouse.get_pos()[1]-(res[1]-ds[1]*const)/2)/const)) ##Coords na debug
-	pygame.display.flip()	
-if input("Save? Y/N").upper() == 'Y' :
-	savemap(mapg.map)
+for x,r in enumerate(mapg.map) :
+	for y,i in enumerate(r) :
+		if y == 0 or y == ds[1]-1 or x == 0 or x == ds[0]-1:
+			i=2
+savemap(mapg.map)
 pygame.quit()
