@@ -20,12 +20,13 @@ Lopata_texture = os.path.join(parent_dir, "Textury", "Lopata01.png")
 try:
     with open(difficulty_file, "r") as file:
         difficulty = int(file.read().strip())
+        print("It hecking works")
 except FileNotFoundError:
     print("Error: Difficulty file not found. Using default difficulty.")
-    difficulty = 1  # Default difficulty in case of an error
+    difficulty = random.randint(1,3)
 except ValueError:
     print("Error: Invalid difficulty value in the file. Using default difficulty.")
-    difficulty = 1
+    difficulty = random.randint(1,3)
 
 pygame.init()
 screen = pygame.display.set_mode((1280, 720))
@@ -56,25 +57,15 @@ def initGame(difficulty):
     
     # HRAC vytvoreni
     game_state.player = character(1000, 100, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
-
-    #lopata
-    game_state.lopata = Shovel(300, 100)  # prvni lopata instance, dost daleko aby nebyla videt
-    game_state.shovel_sprite = pygame.sprite.GroupSingle()  # Use Group() instead of GroupSingle()
-    shovel_spawn = game_state.lopata.SpawnList[0]  # Get the first spawn point
-    shovel = Shovel(shovel_spawn[0], shovel_spawn[1])  # Create Shovel at spawn point
-    game_state.shovel_sprite.add(shovel)  # Add to sprite group
     
     #Sprite Hrace
     game_state.HracSprite = pygame.sprite.GroupSingle()
     game_state.HracSprite.add(game_state.player) 
     
-    #inicializace svicky a svetla s mapou bloku
+    #inicializace svicky a svetla
     game_state.Candle = Candle(game_state.player.rect.centerx, game_state.player.rect.centery)
-    game_state.LightingSystem = LightingEngine(
-                                screen_res=(1280, 720),     # Screen resolution
-                                native_res=(1280, 720),     # Native game resolution
-                                lightmap_res=(1280, 720)    # Lightmap resolution
-                            )
+        
+    game_state.Light = Light(game_state.player.rect.centerx, game_state.player.rect.centery)
 
     #Inicializace Kamery
     game_state.camera = Camera(game_state.player, 1280, 720)
@@ -84,128 +75,36 @@ def initGame(difficulty):
    
     #Enemy init, podle difficulty
     game_state.enemy_sprite = pygame.sprite.Group()
-    enemy_spawn_points = []
+    random_spawn_points = []
     
     #Projede veskery mozny spawn pointy
-    #bylo by lepsi aby to tady resilo i lopatu pro lepsi efektivitu, also ale koho to stve jineho nez cestmira
-    #asi 5x se loopuje pres vsechny bloky lmao
+    #uz je to tady i pro lopatu
     with open(map_file, "r") as map:
         for i, x in enumerate(map):
             for j, y in enumerate(x.strip()):
                 if y == '2':
-                    enemy_spawn_points.append((j*75, i*75))
+                    random_spawn_points.append((j*75, i*75))
     print(difficulty)
-    # Spawn enemies based on difficulty
-    for _ in range(difficulty):
-        if enemy_spawn_points:
-            spawn_point = random.choice(enemy_spawn_points)
+    #Spawn pocet podle difficulty na random mista
+    for i in range(difficulty):
+        if random_spawn_points:
+            spawn_point = random.choice(random_spawn_points)
             enemy = Enemy(spawn_point[0], spawn_point[1], True)
             game_state.enemy_sprite.add(enemy)
-            enemy_spawn_points.remove(spawn_point)
+            random_spawn_points.remove(spawn_point)
+    
+    #lopata
+    game_state.lopata = Shovel(300, 100)  # prvni lopata instance
+    game_state.shovel_sprite = pygame.sprite.GroupSingle()  #bude jen jedna lopata
+    shovel_spawn_point = random.choice(random_spawn_points)
+    shovel = Shovel(spawn_point[0], spawn_point[1],)  # Create Shovel at spawn point
+    game_state.shovel_sprite.add(shovel)  # Add to sprite group
+   
     
     #inicializuj gameclock, kterej se jen stara o to abys mohl hejbat s oknem a nepokazilo to timing
     game_state.game_clock = GameClock(60)
     
     return game_state
-
-
-    def __init__(self, bounds, capacity):
-        """
-        Initialize a Quadtree node.
-        :param bounds: A pygame.Rect defining the region.
-        :param capacity: Maximum number of objects before subdivision.
-        """
-        self.bounds = pygame.Rect(bounds)  # Region of this quadtree node
-        self.capacity = capacity           # Max objects before subdivision
-        self.objects = []                  # Objects in this region
-        self.divided = False               # Flag for child nodes existence
-
-    def insert(self, obj):
-        """
-        Insert an object into the quadtree.
-        :param obj: Object with a `rect` property (pygame.Rect).
-        :return: True if successfully inserted, False otherwise.
-        """
-        if not self.bounds.colliderect(obj.rect):
-            return False  # Object not within bounds
-
-        if len(self.objects) < self.capacity and not self.divided:
-            self.objects.append(obj)
-            return True
-
-        if not self.divided:
-            self.subdivide()
-
-        # Try inserting into child nodes
-        return (
-            self.northwest.insert(obj) or
-            self.northeast.insert(obj) or
-            self.southwest.insert(obj) or
-            self.southeast.insert(obj)
-        )
-
-    def subdivide(self):
-        """
-        Split this node into four children (quadrants).
-        """
-        x, y, w, h = self.bounds
-        half_w, half_h = w // 2, h // 2
-
-        self.northwest = Quadtree((x, y, half_w, half_h), self.capacity)
-        self.northeast = Quadtree((x + half_w, y, half_h, half_h), self.capacity)
-        self.southwest = Quadtree((x, y + half_h, half_w, half_h), self.capacity)
-        self.southeast = Quadtree((x + half_w, y + half_h, half_w, half_h), self.capacity)
-        self.divided = True
-
-    def query(self, range_rect, found=None):
-        """
-        Retrieve objects within a given range.
-        :param range_rect: A pygame.Rect defining the query range.
-        :param found: List to accumulate found objects.
-        :return: List of found objects.
-        """
-        if found is None:
-            found = []
-
-        if not self.bounds.colliderect(range_rect):
-            return found  # No overlap with this node
-
-        # Check objects in the current node
-        for obj in self.objects:
-            if range_rect.colliderect(obj.rect):
-                found.append(obj)
-
-        # Query child nodes if they exist
-        if self.divided:
-            self.northwest.query(range_rect, found)
-            self.northeast.query(range_rect, found)
-            self.southwest.query(range_rect, found)
-            self.southeast.query(range_rect, found)
-
-        return found
-
-    def clear(self):
-        """
-        Clear all objects and reset the quadtree.
-        """
-        self.objects.clear()
-        self.divided = False
-        if hasattr(self, 'northwest'):
-            self.northwest.clear()
-            self.northeast.clear()
-            self.southwest.clear()
-            self.southeast.clear()
-
-    def debug_draw(self, surface):
-        """
-        Draw the quadtree bounds for debugging.
-        """
-        pygame.draw.rect(surface, (255, 0, 0), self.bounds, 1)
-        if self.divided:
-            self.northwest.debug_draw(surface)
-            self.northeast.debug_draw(surface)
-            self.southwest.debug_draw(surface)
-            self.southeast.debug_draw(surface)
 
 class GameFinish:
     def __init__(self, x, y):
@@ -241,9 +140,7 @@ class Candle:
         PosHrac = [player.rect.centerx, player.rect.centery]
 
         self.cooldown += 1
-
         #                                   pos      random pohyb do stran      pohyb nahoru    jak budou velky, postupne se zmensujou
-
         if self.cooldown > 3:
             self.particles.append([[PosHrac[0], PosHrac[1]], [random.uniform(-0.5, 0.5), -1.8], random.randint(2, 3)])
             self.cooldown = 0
@@ -256,11 +153,7 @@ class Candle:
             if particle[2] > 0:
                 radius = int(particle[2] * 4)
                 light_surf = self.circleSurface(radius, (255, 193, 0))
-                try:
-                    screen.blit(light_surf, (particle[0][0] - camera_offset[0] - radius, particle[0][1] - camera_offset[1] - radius - 70), special_flags=pygame.BLEND_RGB_ADD)
-                except pygame.error:
-                # Handle or log the error
-                    print("Could not blit light surface")
+                screen.blit(light_surf, (particle[0][0] - camera_offset[0] - radius, particle[0][1] - camera_offset[1] - radius - 70))
             else:
                 self.particles.remove(particle)
 
@@ -299,25 +192,11 @@ class Shovel(pygame.sprite.Sprite):
         super().__init__()
         self.posX = posX
         self.posY = posY
-        self.SpawnList = []  # Initialize SpawnList
-        self.Spawn()
         self.image = pygame.image.load(Lopata_texture)
         self.image = pygame.transform.scale(self.image, (50, 50))
         self.rect = self.image.get_rect(topleft=(self.posX, self.posY))
         self.durability = 7
         self.is_held = False
-
-    def Spawn(self):
-        with open(map_file, "r") as map:
-            for i, x in enumerate(map):
-                for j, y in enumerate(x.strip()):
-                    if y == '2':
-                        self.posXY = (j*75, i*75)
-                        self.SpawnList.append(self.posXY)
-
-        if self.SpawnList:
-            self.posX, self.posY = random.choice(self.SpawnList)
-            print(self.posX, self.posY)
 
     def update(self, player, camera_offset):
         self.posX -= camera_offset[0]
@@ -347,13 +226,15 @@ class Shovel(pygame.sprite.Sprite):
         
         # destroy range podle pozice hrace
         destroy_range = pygame.Rect(player.rect.centerX - 170, player.rect.centerY - 170, 170, 170)
+        mouse_rect = pygame.Rect(mouse_pos[0], mouse_pos[1], 1, 1)
         
         destroyed_blocks = []
         for block in blocks:
             if destroy_range.colliderect(block.rect):
-                destroyed_blocks.append(block)
-                if len(destroyed_blocks) > self.durability:
-                    break
+                if mouse_rect.colliderect(block.rect) and mouse.get_pressed[0] or mouse.get_pressed[2]:
+                    destroyed_blocks.append(block)
+                    if len(destroyed_blocks) > self.durability:
+                        break
         
         # Remove destroyed blocks and reduce durability
         for block in destroyed_blocks:
@@ -438,7 +319,7 @@ class character(pygame.sprite.Sprite):
         if pressed[pygame.K_LCTRL] and self.cooldown <= 0:
             if not self.IsCrawling:  #Zmeni se na plazeni
                 self.CharacterSirka, self.CharacterVyska = 75, 75
-                self.GroundSpeed = 70
+                self.GroundSpeed = 125
                 self.IsCrawling = True
                 #Textura handeling
                 self.image = self.CrawlingImage #nastavi image na resizenuty image
@@ -486,7 +367,7 @@ class character(pygame.sprite.Sprite):
 
         # Skakani
         if pressed[pygame.K_UP] and self.OnGround and not self.IsClimbing:
-            self.vel.y = -1135 if not self.IsCrawling else 0 #skakani nelze behem krceni
+            self.vel.y = -1135 if not self.IsCrawling else -1135#skakani nelze behem krceni
             self.OnGround = False  #Nastavi okamzite ze nejsi na zemi
 
         #lezeni
@@ -551,7 +432,7 @@ class Light:
         self.head_light = PointLight(
             position=(x,y),        #souradnice x, y
             power = 3,            # Default power
-            radius = 300,         # Random Radius
+            radius = 300,         #
         )
         self.head_light.set_color(255,100,0, 255)
         lights_engine.lights.append(self.head_light)
@@ -560,11 +441,6 @@ class Light:
         #hlavova pozice na vrchu hrace
         head_x = float(player.rect.centerx - camera_offset[0])
         head_y = float(player.rect.top - camera_offset[1])
-
-        print(f"Number of lights: {len(lights_engine.lights)}")
-        for i, light in enumerate(lights_engine.lights):
-            print(f"Light {i}: Position={light.position}, Radius={light.radius}, Power={light.power}")
-        print(f"Player rect: {player.rect}")
 
         # Update the head light position
         self.head_light.position = (head_x, head_y)
@@ -588,7 +464,7 @@ class environmentblock(pygame.sprite.Sprite):
         
         # Convert surfaces to textures
         self.NormalImage1 = lights_engine.surface_to_texture(self.normal_surface1)
-        self.NormalImage2 = lights_engine.surface_to_texture(self.normal_surface1)
+        self.NormalImage2 = lights_engine.surface_to_texture(self.normal_surface2)
         
         # Set initial image and create rect with correct dimensions
          # Keep track of current surface for dimensions
@@ -613,7 +489,7 @@ class Enemy(pygame.sprite.Sprite):
         self.pos = pygame.math.Vector2(x, y)
         self.move = pygame.math.Vector2(200, 0)  #pocatecni rychlost x, jde doprava
         self.OnGround = OnGround
-        self.image = pygame.Surface((70, 70))
+        self.image = pygame.Surface((74, 74))
         self.image.fill((200, 0, 200))
         self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
         self.Speed = 200  #Rychlost pohybu
@@ -641,15 +517,9 @@ class Enemy(pygame.sprite.Sprite):
         self.maxJumpCooldown = 1.0  # 1 sekunda cooldown
         self.jumping = False
 
-        #nacteni a nastaveni textury spritu
-        self.OriginalImage = pygame.image.load(Enemy_Texture).convert_alpha()
-        self.StandingImage = pygame.transform.scale(self.OriginalImage, (70, 70))
-        self.image = self.StandingImage
-        self.rect = self.image.get_rect(topleft = (round(self.pos.x), round(self.pos.y)))
-
         # Load and prepare both normal and flipped textures at initialization
         self.original_surface = pygame.image.load(Enemy_Texture)
-        self.standing_surface = pygame.transform.scale(self.original_surface, (300, 100))
+        self.standing_surface = pygame.transform.scale(self.original_surface, (75, 75))
         self.flipped_surface = pygame.transform.flip(self.standing_surface, True, False)
         
         # Convert surfaces to textures
@@ -852,7 +722,7 @@ def CreateMap():
             for j, y in enumerate(x.strip()):
                 if y == '1' or y == '0':
                     CaveRockSprites.add(environmentblock(j*75, i*75, 75, 75))
-                elif y == '2':
+                else:
                     CaveBackgroundSprites.add(environmentblock(j*75, i*75, 75, 75))
 
     return CaveRockSprites, CaveBackgroundSprites
@@ -871,21 +741,11 @@ def game_loop(game_state):
         game_state.camera.update()
         game_state.player.update(delta_time, game_state.CaveRockSprites)
 
-        enemy = game_state.enemy_sprite.sprites()[0]
-        enemy.update(delta_time, game_state.CaveRockSprites)
-        enemy.patrol(game_state.player, game_state.CaveRockSprites, game_state.time_passed)
-        enemy.killCheck(game_state)
+        for enemy in game_state.enemy_sprite.sprites():
+            enemy.update(delta_time, game_state.CaveRockSprites)
+            enemy.patrol(game_state.player, game_state.CaveRockSprites, game_state.time_passed)
+            enemy.killCheck(game_state)
 
-        # init Quadtree
-        def initialize_quadtree(map_width, map_height, wall_sprites, capacity=4):
-            """
-            Initialize and populate the quadtree with wall objects.
-            """
-            quadtree = Quadtree((0, 0, map_width, map_height), capacity)
-            for wall in wall_sprites:
-                quadtree.insert(wall)
-            return quadtree
-        
         #Vykreslovani - renderovani
         render_game(game_state)
 
@@ -901,18 +761,19 @@ def render_game(game_state):
             # Convert tuples to pygame.Rect objects
             dest_rect = pygame.Rect(pos[0], pos[1], sprite.rect.width, sprite.rect.height)
             source_rect = pygame.Rect(0, 0, sprite.rect.width, sprite.rect.height)
-            lights_engine.render_texture(sprite.NormalImage1, pl2d.BACKGROUND, dest_rect, source_rect)
-        if pos[0] > -75 and pos[0] < 1280 and pos[1] > -75 and pos[1] < 720:
-            game_state.screen.blit(sprite.normal_surface1, pos)
+            lights_engine.render_texture(sprite.NormalImage2, pl2d.BACKGROUND, dest_rect, source_rect)
+
     
     # Render rock sprites on top of background
     for sprite in game_state.CaveRockSprites:
         pos = game_state.camera.apply(sprite)
         if pos[0] > -75 and pos[0] < 1280 and pos[1] > -75 and pos[1] < 720:
-            game_state.screen.blit(sprite.normal_surface2, pos)
+            dest_rect = pygame.Rect(pos[0], pos[1], sprite.rect.width, sprite.rect.height)
+            source_rect = pygame.Rect(0, 0, sprite.rect.width, sprite.rect.height)
+            lights_engine.render_texture(sprite.NormalImage1, pl2d.BACKGROUND, dest_rect, source_rect)
 
     
-    camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y) #pro svetlo na svicce
+    camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y)
 
     # hrac se vsema nalezitostma (rect)
     player = game_state.player
@@ -922,19 +783,24 @@ def render_game(game_state):
     lights_engine.render_texture(player.image, pl2d.BACKGROUND, player_dest, player_source)
 
     #render enemy se spravnejma rectama
-    enemy = game_state.enemy_sprite.sprites()[0]
-    enemy_pos = game_state.camera.apply(enemy)
-    enemy_dest = pygame.Rect(enemy_pos[0], enemy_pos[1], enemy.rect.width, enemy.rect.height)
-    enemy_source = pygame.Rect(0, 0, enemy.rect.width, enemy.rect.height)
-    lights_engine.render_texture(enemy.image, pl2d.BACKGROUND, enemy_dest, enemy_source)
+    for enemy in game_state.enemy_sprite.sprites():
+        enemy_pos = game_state.camera.apply(enemy)
+        enemy_dest = pygame.Rect(enemy_pos[0], enemy_pos[1], enemy.rect.width, enemy.rect.height)
+        enemy_source = pygame.Rect(0, 0, enemy.rect.width, enemy.rect.height)
+        lights_engine.render_texture(enemy.image, pl2d.BACKGROUND, enemy_dest, enemy_source)
     
-    lopata = game_state.lopata
-    lopata.update(player, camera_offset)
+
+    game_state.lopata.update(player, camera_offset)
 
     #vykresleni svetla - candle
     game_state.Candle.createSource(game_state.player, game_state.screen, camera_offset)
+
+
+    game_state.Light.createSource(game_state.player, camera_offset)
     
     lights_engine.render()
+
+
     pygame.display.flip()
 
 def main(difficulty):

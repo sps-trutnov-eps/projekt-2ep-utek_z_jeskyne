@@ -4,7 +4,7 @@ import sys
 def difficulty_menu():
     pygame.init()
     screen = pygame.display.set_mode((1280, 720))
-    pygame.display.set_caption("Difficulty Selection")
+    pygame.display.set_caption("Main Menu")
 
     # Colors
     black = (0, 0, 0)
