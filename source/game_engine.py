@@ -10,7 +10,7 @@ file_dir = os.path.dirname(os.path.abspath(__file__)) #absolutni path k tomuto g
 parent_dir = os.path.abspath(os.path.join(file_dir, os.path.pardir)) #tohle pouzije path k tomuto py soboru a jde o jeden level vys
 map_file = os.path.join(parent_dir, "map")
 difficulty_file = os.path.join(file_dir, "diff")
-Enemy_Texture = os.path.join(parent_dir, "Textury", "Enemy01.png")
+Enemy_Texture = os.path.join(parent_dir, "Textury", "Enemy02.png")
 PLayer_Texture = os.path.join(parent_dir, "Textury", "Character01.png")
 Kamen1_Texture = os.path.join(parent_dir, "Textury", "Kamen01.png")
 Kamen2_Texture = os.path.join(parent_dir, "Textury", "Kamen02.png")
@@ -22,10 +22,10 @@ try:
         difficulty = int(file.read().strip())
         print("It hecking works")
 except FileNotFoundError:
-    print("Error: Difficulty file not found. Using default difficulty.")
+    print("Error: Difficulty file not found. Using random difficulty.")
     difficulty = random.randint(1,3)
 except ValueError:
-    print("Error: Invalid difficulty value in the file. Using default difficulty.")
+    print("Error: Invalid difficulty value in the file. Using random difficulty.")
     difficulty = random.randint(1,3)
 
 pygame.init()
@@ -94,11 +94,10 @@ def initGame(difficulty):
             random_spawn_points.remove(spawn_point)
     
     #lopata
-    game_state.lopata = Shovel(300, 100)  # prvni lopata instance
-    game_state.shovel_sprite = pygame.sprite.GroupSingle()  #bude jen jedna lopata
     shovel_spawn_point = random.choice(random_spawn_points)
-    shovel = Shovel(spawn_point[0], spawn_point[1],)  # Create Shovel at spawn point
-    game_state.shovel_sprite.add(shovel)  # Add to sprite group
+    game_state.lopata = Shovel(shovel_spawn_point[0], shovel_spawn_point[1])  # Create Shovel at spawn point
+    game_state.shovel_sprite = pygame.sprite.GroupSingle()  #bude jen jedna lopata
+    game_state.shovel_sprite.add(game_state.lopata)  # Add to sprite group
    
     
     #inicializuj gameclock, kterej se jen stara o to abys mohl hejbat s oknem a nepokazilo to timing
@@ -192,31 +191,22 @@ class Shovel(pygame.sprite.Sprite):
         super().__init__()
         self.posX = posX
         self.posY = posY
-        self.image = pygame.image.load(Lopata_texture)
+        self.image = pygame.image.load(Lopata_texture).convert_alpha()
         self.image = pygame.transform.scale(self.image, (50, 50))
+        self.texture = lights_engine.surface_to_texture(self.image)
         self.rect = self.image.get_rect(topleft=(self.posX, self.posY))
         self.durability = 7
         self.is_held = False
+        self.is_active = False
 
     def update(self, player, camera_offset):
-        self.posX -= camera_offset[0]
-        self.posY -= camera_offset[1]
+        if self.is_held:
+            print("ted tu lopatu mas")
         if not self.is_held and self.rect.colliderect(player.rect):
             self.is_held = True
             return True
         return False
 
-    def updateCollision(player, shovel_sprite):
-        for shovel in shovel_sprite:
-            # Check if shovel is not already held
-            if not shovel.is_held:
-                # Check collision with player
-                if shovel.rect.colliderect(player.rect):
-                    shovel.is_held = True
-                    player.has_shovel = True  # Add this to player class
-                    return shovel
-
-        return None
 
     def destroyWalls(self, blocks, player):
         if not self.is_held or self.durability <= 0:
@@ -229,12 +219,13 @@ class Shovel(pygame.sprite.Sprite):
         mouse_rect = pygame.Rect(mouse_pos[0], mouse_pos[1], 1, 1)
         
         destroyed_blocks = []
-        for block in blocks:
-            if destroy_range.colliderect(block.rect):
-                if mouse_rect.colliderect(block.rect) and mouse.get_pressed[0] or mouse.get_pressed[2]:
-                    destroyed_blocks.append(block)
-                    if len(destroyed_blocks) > self.durability:
-                        break
+        if self.is_held:
+            for block in blocks:
+                if destroy_range.colliderect(block.rect):
+                    if mouse_rect.colliderect(block.rect) and pygame.mouse.get_pressed[0] or pygame.mouse.get_pressed[2]:
+                        destroyed_blocks.append(block)
+                        if len(destroyed_blocks) > self.durability:
+                            break
         
         # Remove destroyed blocks and reduce durability
         for block in destroyed_blocks:
@@ -262,8 +253,6 @@ class character(pygame.sprite.Sprite):
         self.IsCrawling = False
         self.IsClimbing = False
         self.DivaSeDoprava = True
-        self.has_shovel = False
-
 
         # Load the original image as a Pygame surface first to get dimensions
         self.original_surface = pygame.image.load(PLayer_Texture)
@@ -519,7 +508,7 @@ class Enemy(pygame.sprite.Sprite):
 
         # Load and prepare both normal and flipped textures at initialization
         self.original_surface = pygame.image.load(Enemy_Texture)
-        self.standing_surface = pygame.transform.scale(self.original_surface, (75, 75))
+        self.standing_surface = pygame.transform.scale(self.original_surface, (75, 45))
         self.flipped_surface = pygame.transform.flip(self.standing_surface, True, False)
         
         # Convert surfaces to textures
@@ -746,6 +735,9 @@ def game_loop(game_state):
             enemy.patrol(game_state.player, game_state.CaveRockSprites, game_state.time_passed)
             enemy.killCheck(game_state)
 
+        
+        game_state.lopata.update(game_state.player, game_state.camera)
+
         #Vykreslovani - renderovani
         render_game(game_state)
 
@@ -790,7 +782,13 @@ def render_game(game_state):
         lights_engine.render_texture(enemy.image, pl2d.BACKGROUND, enemy_dest, enemy_source)
     
 
-    game_state.lopata.update(player, camera_offset)
+    #A lopata at last
+    shovel = game_state.lopata
+    shovel_pos = game_state.camera.apply(shovel)
+    shovel_dest = pygame.Rect(shovel_pos[0], shovel_pos[1], shovel.image.get_width(), shovel.image.get_height())
+    shovel_source = pygame.Rect(0, 0, shovel.image.get_width(), shovel.image.get_height())
+    lights_engine.render_texture(shovel.texture, pl2d.BACKGROUND, shovel_dest, shovel_source)
+
 
     #vykresleni svetla - candle
     game_state.Candle.createSource(game_state.player, game_state.screen, camera_offset)
