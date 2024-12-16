@@ -28,6 +28,7 @@ except ValueError:
     print("Error: Invalid difficulty value in the file. Using random difficulty.")
     difficulty = random.randint(1,3)
 
+
 pygame.init()
 screen = pygame.display.set_mode((1280, 720))
 
@@ -201,35 +202,41 @@ class Shovel(pygame.sprite.Sprite):
 
     def update(self, player, camera_offset):
         if self.is_held:
-            print("ted tu lopatu mas")
+            pass
         if not self.is_held and self.rect.colliderect(player.rect):
             self.is_held = True
             return True
         return False
 
 
-    def destroyWalls(self, blocks, player):
+    def destroyWalls(self, CaveRockSprites,CaveBackgroundSprites, player):
         if not self.is_held or self.durability <= 0:
             return False
 
         mouse_pos = pygame.mouse.get_pos()
         
         # destroy range podle pozice hrace
-        destroy_range = pygame.Rect(player.rect.centerX - 170, player.rect.centerY - 170, 170, 170)
         mouse_rect = pygame.Rect(mouse_pos[0], mouse_pos[1], 1, 1)
         
         destroyed_blocks = []
         if self.is_held:
-            for block in blocks:
-                if destroy_range.colliderect(block.rect):
-                    if mouse_rect.colliderect(block.rect) and pygame.mouse.get_pressed[0] or pygame.mouse.get_pressed[2]:
+            for block in CaveBackgroundSprites:
+                if mouse_rect.colliderect(block.rect):
+                    print(("NICIM BLOK"))
+                    if pygame.mouse.get_pressed()[0]:
+                        print(("KLIKAS"))
+                        # Create a new rock sprite with the same texture and position
+                        new_rock_block = environmentblock(block.rect.x, block.rect.y, block.rect.width, block.rect.height)
+                        new_rock_block.image1 = block.image1  # Preserve the original texture
+                        CaveRockSprites.add(new_rock_block)
                         destroyed_blocks.append(block)
-                        if len(destroyed_blocks) > self.durability:
-                            break
-        
-        # Remove destroyed blocks and reduce durability
+                    
+                    if len(destroyed_blocks) > self.durability:
+                        break
+    
+        # Remove destroyed blocks from background
         for block in destroyed_blocks:
-            blocks.remove(block)
+            CaveBackgroundSprites.remove(block)
         
         self.durability -= 1
         return len(destroyed_blocks) > 0
@@ -737,6 +744,7 @@ def game_loop(game_state):
 
         
         game_state.lopata.update(game_state.player, game_state.camera)
+        game_state.lopata.destroyWalls(game_state.CaveRockSprites,game_state.CaveBackgroundSprites, game_state.player)
 
         #Vykreslovani - renderovani
         render_game(game_state)
@@ -793,11 +801,9 @@ def render_game(game_state):
     #vykresleni svetla - candle
     game_state.Candle.createSource(game_state.player, game_state.screen, camera_offset)
 
-
     game_state.Light.createSource(game_state.player, camera_offset)
-    
-    lights_engine.render()
 
+    lights_engine.render()
 
     pygame.display.flip()
 
