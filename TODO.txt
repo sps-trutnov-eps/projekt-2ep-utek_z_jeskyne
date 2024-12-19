@@ -1,10 +1,10 @@
 IN NO PARTICULAR ORDER
 
+at se na zacatku nezapina 2x pygame okno
 svičce se nemeni pozice při crouchovani
-lopata
-svetlo
+lopata - niceni
 game end - dodělat domecek
-proceduralni mapa
-lepsi textury/animace (textury pro typ kamene 0 a 1)
-Realný pozadí ať není černý
-enemy AI (aby se umel pohybovat i po Y axis)(načíst mapu něco něco)
+proceduralni mapa integrovat
+Pozadí
+enemy AI (aby se umel pohybovat i po Y axis)
+
