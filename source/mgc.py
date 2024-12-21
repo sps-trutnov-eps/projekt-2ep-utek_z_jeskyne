@@ -3,6 +3,12 @@ import random
 import pygame
 import cas
 import sys
+import os
+
+file_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.abspath(os.path.join(file_dir, os.path.pardir))
+map_file = os.path.join(parent_dir, "map")
+
 #import threading
 ds = (int(sys.argv[1]),int(sys.argv[2]))
 mapg = cas.MapGrid(ds)
@@ -53,7 +59,8 @@ class kapka :
 		self.x = m[0]
 		self.y = m[1]
 def savemap(map) :
-	fmap = open("map", "w")
+	fmap = open(map_file, "w")
+	print("uklada se to")
 	for x in map :
 		buffer = ""
 		for y in x :

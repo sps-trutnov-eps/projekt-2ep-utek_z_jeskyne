@@ -57,7 +57,7 @@ def initGame(difficulty):
     game_state.clock = pygame.time.Clock()
     
     # HRAC vytvoreni
-    game_state.player = character(1000, 100, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
+    game_state.player = character(0, 100, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
     
     #Sprite Hrace
     game_state.HracSprite = pygame.sprite.GroupSingle()
@@ -96,7 +96,8 @@ def initGame(difficulty):
     
     #lopata
     shovel_spawn_point = random.choice(random_spawn_points)
-    game_state.lopata = Shovel(shovel_spawn_point[0], shovel_spawn_point[1])  # Create Shovel at spawn point
+    #game_state.lopata = Shovel(shovel_spawn_point[0], shovel_spawn_point[1])  #Spawn lopatu na vybrany volny random misto
+    game_state.lopata = Shovel(0, -75)
     game_state.shovel_sprite = pygame.sprite.GroupSingle()  #bude jen jedna lopata
     game_state.shovel_sprite.add(game_state.lopata)  # Add to sprite group
    
@@ -122,40 +123,6 @@ class GameFinish:
             print("Game END, you escaped")
             return True
         return False
-
-class Candle:
-    def __init__(self, x, y):
-        self.source = [x,y]
-        self.particles = []      # [loc, velocity, timer]
-        self.cooldown = 0
-        
-
-    def circleSurface(self, radius, color):
-        surf = pygame.Surface((radius * 2, radius * 2))
-        pygame.draw.circle(surf, color, (radius, radius), radius)
-        surf.set_colorkey((0, 0, 0))
-        return surf
-
-    def createSource(self, player, screen, camera_offset):
-        PosHrac = [player.rect.centerx, player.rect.centery]
-
-        self.cooldown += 1
-        #                                   pos      random pohyb do stran      pohyb nahoru    jak budou velky, postupne se zmensujou
-        if self.cooldown > 3:
-            self.particles.append([[PosHrac[0], PosHrac[1]], [random.uniform(-0.5, 0.5), -1.8], random.randint(2, 3)])
-            self.cooldown = 0
-
-        for particle in self.particles:
-            particle[0][0] += particle[1][0] #pohyb do stran
-            particle[0][1] += particle[1][1] #pohyb nahoru
-            particle[1][1] += 0.004 #to je pohyb nahoru
-            particle[2] -= 0.03  #to je zmensuje
-            if particle[2] > 0:
-                radius = int(particle[2] * 4)
-                light_surf = self.circleSurface(radius, (255, 193, 0))
-                screen.blit(light_surf, (particle[0][0] - camera_offset[0] - radius, particle[0][1] - camera_offset[1] - radius - 70))
-            else:
-                self.particles.remove(particle)
 
 class Camera:
     def __init__(self, target, screen_width, screen_height):
@@ -200,45 +167,43 @@ class Shovel(pygame.sprite.Sprite):
         self.is_held = False
         self.is_active = False
 
-    def update(self, player, camera_offset):
-        if self.is_held:
-            pass
+    def update(self, player):
         if not self.is_held and self.rect.colliderect(player.rect):
             self.is_held = True
             return True
         return False
 
 
-    def destroyWalls(self, CaveRockSprites,CaveBackgroundSprites, player):
+    def destroyWalls(self, Rock, BackgRock, player, camera):
         if not self.is_held or self.durability <= 0:
             return False
 
         mouse_pos = pygame.mouse.get_pos()
-        
-        # destroy range podle pozice hrace
-        mouse_rect = pygame.Rect(mouse_pos[0], mouse_pos[1], 1, 1)
-        
+        camera_offset = (camera.offset.x, camera.offset.y)
+        # Adjust for the camera's offset to get the real-world position
+        mouse_rect = pygame.Rect(mouse_pos[0] + camera_offset[0], mouse_pos[1] + camera_offset[1], 1, 1)
+
         destroyed_blocks = []
-        if self.is_held:
-            for block in CaveBackgroundSprites:
+        if self.is_held and pygame.mouse.get_pressed()[0]:  # Check if the left mouse button is clicked
+            for block in Rock:
                 if mouse_rect.colliderect(block.rect):
-                    print(("NICIM BLOK"))
-                    if pygame.mouse.get_pressed()[0]:
-                        print(("KLIKAS"))
-                        # Create a new rock sprite with the same texture and position
-                        new_rock_block = environmentblock(block.rect.x, block.rect.y, block.rect.width, block.rect.height)
-                        new_rock_block.image1 = block.image1  # Preserve the original texture
-                        CaveRockSprites.add(new_rock_block)
-                        destroyed_blocks.append(block)
-                    
-                    if len(destroyed_blocks) > self.durability:
+                    # Move block from Rock to BackgRock
+                    new_background_block = environmentblock(
+                        block.rect.x, block.rect.y, block.rect.width, block.rect.height
+                    )
+                    new_background_block.image1 = block.image1  # Preserve the original texture
+                    BackgRock.add(new_background_block)
+                    destroyed_blocks.append(block)
+
+                    # Reduce durability for each destroyed block
+                    self.durability -= 1
+                    if self.durability <= 0:
                         break
-    
-        # Remove destroyed blocks from background
+
+        # Remove destroyed blocks from the Rock group
         for block in destroyed_blocks:
-            CaveBackgroundSprites.remove(block)
-        
-        self.durability -= 1
+            Rock.remove(block)
+
         return len(destroyed_blocks) > 0
        
 class character(pygame.sprite.Sprite):
@@ -440,6 +405,47 @@ class Light:
 
         # Update the head light position
         self.head_light.position = (head_x, head_y)
+
+class Candle:
+    def __init__(self, x, y):
+        self.source = [x,y]
+        self.particles = []      # [location, velocity, timer]
+        self.cooldown = 0
+
+    def circleSurface(self, radius, color):
+        surf = pygame.Surface((radius * 2, radius * 2))
+        pygame.draw.circle(surf, color, (radius, radius), radius)
+        surf.set_colorkey((0, 0, 0))
+        texture = lights_engine.surface_to_texture(surf)
+        return texture
+
+    def createSourceCandle(self, player, screen, camera_offset):
+        PosHrac = [player.rect.centerx, player.rect.centery]
+
+        self.cooldown += 1
+        #                                   pos      random pohyb do stran      pohyb nahoru    jak budou velky, postupne se zmensujou
+        if self.cooldown > 3:
+            self.particles.append([[PosHrac[0], PosHrac[1]], [random.uniform(-0.5, 0.5), -1.8], random.randint(2, 3)])
+            self.cooldown = 0
+
+        for particle in self.particles:
+            particle[0][0] += particle[1][0] #pohyb do stran
+            particle[0][1] += particle[1][1] #pohyb nahoru
+            particle[1][1] += 0.004 #to je pohyb nahoru
+            particle[2] -= 0.03  #to je zmensuje
+            if particle[2] > 0:
+                radius = int(particle[2] * 4)
+                light_surf = self.circleSurface(radius, (255, 193, 0))
+                if radius > 0:
+                    lights_engine.render_texture(
+                                    light_surf,  #textura tvorena v circlesurface
+                                    pl2d.BACKGROUND,  #Foreground znamena ze neni afektovana svetlem
+                                    pygame.Rect(particle[0][0] - camera_offset[0] - radius, particle[0][1] - camera_offset[1] - radius - 70, radius * 2, radius * 2),  # Destination rect
+                                    pygame.Rect(0, 0, radius * 2, radius * 2)  # Source rect
+                                )
+                    light_surf.release()
+            else:
+                self.particles.remove(particle)
 
 class environmentblock(pygame.sprite.Sprite):
     def __init__(self, x, y, sirka, vyska, is_background=True):
@@ -716,10 +722,10 @@ def CreateMap():
     with open(map_file, "r") as mapp:
         for i, x in enumerate(mapp):
             for j, y in enumerate(x.strip()):
+                CaveBackgroundSprites.add(environmentblock(j*75, i*75, 75, 75))
                 if y == '1' or y == '0':
                     CaveRockSprites.add(environmentblock(j*75, i*75, 75, 75))
-                else:
-                    CaveBackgroundSprites.add(environmentblock(j*75, i*75, 75, 75))
+
 
     return CaveRockSprites, CaveBackgroundSprites
 
@@ -743,8 +749,8 @@ def game_loop(game_state):
             enemy.killCheck(game_state)
 
         
-        game_state.lopata.update(game_state.player, game_state.camera)
-        game_state.lopata.destroyWalls(game_state.CaveRockSprites,game_state.CaveBackgroundSprites, game_state.player)
+        game_state.lopata.update(game_state.player)
+        game_state.lopata.destroyWalls(game_state.CaveRockSprites,game_state.CaveBackgroundSprites, game_state.player, game_state.camera)
 
         #Vykreslovani - renderovani
         render_game(game_state)
@@ -799,7 +805,7 @@ def render_game(game_state):
 
 
     #vykresleni svetla - candle
-    game_state.Candle.createSource(game_state.player, game_state.screen, camera_offset)
+    game_state.Candle.createSourceCandle(game_state.player, game_state.screen, camera_offset)
 
     game_state.Light.createSource(game_state.player, camera_offset)
 
