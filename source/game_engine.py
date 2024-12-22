@@ -14,13 +14,14 @@ Enemy_Texture = os.path.join(parent_dir, "Textury", "Enemy02.png")
 PLayer_Texture = os.path.join(parent_dir, "Textury", "Character01.png")
 Kamen1_Texture = os.path.join(parent_dir, "Textury", "Kamen01.png")
 Kamen2_Texture = os.path.join(parent_dir, "Textury", "Kamen02.png")
-Dum_Texture = os.path.join(parent_dir, "Textury", "Domecek01.png")
 Lopata_texture = os.path.join(parent_dir, "Textury", "Lopata01.png")
+Domecek_Texture = os.path.join(parent_dir, "Textury", "Domecek01.png")
+Pozadi = os.path.join(parent_dir, "Textury", "Lopata01.png")
+
 
 try:
     with open(difficulty_file, "r") as file:
         difficulty = int(file.read().strip())
-        print("It hecking works")
 except FileNotFoundError:
     print("Error: Difficulty file not found. Using random difficulty.")
     difficulty = random.randint(1,3)
@@ -55,13 +56,42 @@ def initGame(difficulty):
     # init obrazovku a hodiny
     game_state.screen = pygame.display.get_surface()
     game_state.clock = pygame.time.Clock()
+
+
+    #Enemy init, podle difficulty
+    game_state.enemy_sprite = pygame.sprite.Group()
+    random_spawn_points = []
+    player_spawns = []
     
-    # HRAC vytvoreni
-    game_state.player = character(0, 100, 100, OnGround = True, CharacterSirka = 50, CharacterVyska = 150)
-    
+    #Projede veskery mozny spawn pointy
+    with open(map_file, "r") as map:
+        lines = map.readlines()
+    # Iterate through the map to find valid spawn points
+    for i, line in enumerate(lines):
+        for j, y in enumerate(line.strip()):
+            if y == '2':
+                random_spawn_points.append((j * 75, i * 75))
+                # Check for two consecutive '2's (space for two-block-tall player)
+                if i - 1 >= 0 and lines[i - 1][j] == '2':  # Block above is also '2'
+                    player_spawns.append((j * 75, i * 75))  # Add the lower block as a spawn point
+
+    # Sort by y-coordinate (second element of tuple)
+    player_spawns.sort(key=lambda pos: pos[1])
+
+    x, y = player_spawns[-1]
+    x += 37
+    y -= 75
+
     #Sprite Hrace
+    game_state.player = character(x, y, 100, OnGround=True, CharacterSirka= 75, CharacterVyska= 150)
     game_state.HracSprite = pygame.sprite.GroupSingle()
     game_state.HracSprite.add(game_state.player) 
+    
+    
+    #Game finish - domecek spawn a init
+    game_state.Finish = GameFinish(15*75, -300)
+    game_state.FinishSprite = pygame.sprite.GroupSingle()
+    game_state.FinishSprite.add(game_state.Finish)
     
     #inicializace svicky a svetla
     game_state.Candle = Candle(game_state.player.rect.centerx, game_state.player.rect.centery)
@@ -74,30 +104,11 @@ def initGame(difficulty):
     #Postav mapu, upec chleba
     game_state.CaveRockSprites, game_state.CaveBackgroundSprites = CreateMap()
    
-    #Enemy init, podle difficulty
-    game_state.enemy_sprite = pygame.sprite.Group()
-    random_spawn_points = []
-    
-    #Projede veskery mozny spawn pointy
-    #uz je to tady i pro lopatu
-    with open(map_file, "r") as map:
-        for i, x in enumerate(map):
-            for j, y in enumerate(x.strip()):
-                if y == '2':
-                    random_spawn_points.append((j*75, i*75))
-    print(difficulty)
-    #Spawn pocet podle difficulty na random mista
-    for i in range(difficulty):
-        if random_spawn_points:
-            spawn_point = random.choice(random_spawn_points)
-            enemy = Enemy(spawn_point[0], spawn_point[1], True)
-            game_state.enemy_sprite.add(enemy)
-            random_spawn_points.remove(spawn_point)
-    
+
     #lopata
     shovel_spawn_point = random.choice(random_spawn_points)
-    #game_state.lopata = Shovel(shovel_spawn_point[0], shovel_spawn_point[1])  #Spawn lopatu na vybrany volny random misto
-    game_state.lopata = Shovel(0, -75)
+    game_state.lopata = Shovel(shovel_spawn_point[0], shovel_spawn_point[1])  #Spawn lopatu na vybrany volny random misto
+    #game_state.lopata = Shovel(0, -75)
     game_state.shovel_sprite = pygame.sprite.GroupSingle()  #bude jen jedna lopata
     game_state.shovel_sprite.add(game_state.lopata)  # Add to sprite group
    
@@ -107,20 +118,21 @@ def initGame(difficulty):
     
     return game_state
 
-class GameFinish:
+class GameFinish(pygame.sprite.Sprite):
     def __init__(self, x, y):
-        self.Image = pygame.image.load(Dum_Texture).convert_alpha()
+        super().__init__()
         self.x = x
         self.y = y
-        self.rect = self.Image.get_rect(topleft=(x, y))
-
-    def Spawn():
-        pass
-    #jen at to vezme pocet bloku v prvni rade a vynasobi to 75 a pak to spawne na ty souradnici
-    
-    def CheckEndGame(self, Hrac):
-        if self.rect.colliderect(Hrac.rect):
+        self.original_surface = pygame.image.load(Domecek_Texture).convert_alpha()
+        self.converted_surf = pygame.transform.scale(self.original_surface, (300, 300))
+        self.Image = lights_engine.surface_to_texture(self.converted_surf)
+        self.rect = self.converted_surf.get_rect(topleft=(self.x, self.y))
+   
+    def CheckEndGame(self, player, camera):
+        if self.rect.colliderect(player.rect):
             print("Game END, you escaped")
+            pygame.quit()
+            sys.exit()
             return True
         return False
 
@@ -163,7 +175,7 @@ class Shovel(pygame.sprite.Sprite):
         self.image = pygame.transform.scale(self.image, (50, 50))
         self.texture = lights_engine.surface_to_texture(self.image)
         self.rect = self.image.get_rect(topleft=(self.posX, self.posY))
-        self.durability = 7
+        self.durability = 15
         self.is_held = False
         self.is_active = False
 
@@ -238,6 +250,7 @@ class character(pygame.sprite.Sprite):
         self.StandingImage = lights_engine.surface_to_texture(self.standing_surface)
         self.CrawlingImage = lights_engine.surface_to_texture(self.crawling_surface)
         self.FlippedImage = lights_engine.surface_to_texture(self.flipped_surface)
+        self.FlippedCrawlingImage = lights_engine.surface_to_texture(pygame.transform.flip(self.crawling_surface, True, False))
 
         #soucasny vyska,sirka pro zmenu crawling/standing
         self.current_width = self.standing_surface.get_width()
@@ -270,7 +283,7 @@ class character(pygame.sprite.Sprite):
         self.CanStandUp = True
         pressed = pygame.key.get_pressed()
         #tohle je blok nad hracem, pres kterej se kontroluje jestli se muze postavit
-        SpaceCheckerRect = pygame.Rect(self.rect.x + 50, self.rect.y - (100 - self.CharacterVyska), 50, 50)
+        SpaceCheckerRect = pygame.Rect(self.rect.x, self.rect.y - (100 - self.CharacterVyska), 50, 50)
         
         for block in blocks:
             if SpaceCheckerRect.colliderect(block.rect):
@@ -278,12 +291,12 @@ class character(pygame.sprite.Sprite):
                 break
         #Tohle handeluje zmenu mezi stanim a plazenim i s texturama
         if pressed[pygame.K_LCTRL] and self.cooldown <= 0:
-            if not self.IsCrawling:  #Zmeni se na plazeni
+            if not self.IsCrawling:  # Change to crawling
                 self.CharacterSirka, self.CharacterVyska = 75, 75
                 self.GroundSpeed = 125
                 self.IsCrawling = True
-                #Textura handeling
-                self.image = self.CrawlingImage #nastavi image na resizenuty image
+                # Use correct crawling texture based on direction
+                self.image = self.CrawlingImage if self.DivaSeDoprava else self.FlippedCrawlingImage
                 self.current_width = self.crawling_surface.get_width()
                 self.current_height = self.crawling_surface.get_height()
                 self.update_rect_dimensions(
@@ -291,16 +304,17 @@ class character(pygame.sprite.Sprite):
                     self.current_height,
                     self.pos.x,
                     self.pos.y
-                ) 
-            elif self.IsCrawling and self.CanStandUp:  #Zmena na postaveni, pokud ma nad sebou misto
+                )
+            elif self.IsCrawling and self.CanStandUp:
                 self.CharacterSirka, self.CharacterVyska = 75, 150
                 self.GroundSpeed = 250
                 self.IsCrawling = False
-                #Textura handeling, stejne jako vyse
                 self.current_width = self.standing_surface.get_width()
                 self.current_height = self.standing_surface.get_height()
+                # Use correct standing texture based on direction
+                self.image = self.StandingImage if self.DivaSeDoprava else self.FlippedImage
                 self.update_rect_dimensions(
-                    self.current_width,
+                    self.current_width, 
                     self.current_height,
                     self.pos.x,
                     self.pos.y
@@ -313,17 +327,16 @@ class character(pygame.sprite.Sprite):
 
         # Horizontalni movement
         self.vel.x = 0
-        if pressed[pygame.K_LEFT]:# or pressed[pygame.K_a]:
+        if pressed[pygame.K_LEFT] or pressed[pygame.K_a]:
             self.vel.x -= self.GroundSpeed
-            if self.DivaSeDoprava: #pokud se divas doprava tak se otoci image
-                CurrentImage = self.StandingImage if not self.IsCrawling else self.CrawlingImage #check jestli ma byt postava na vysku nebo sirku
-                self.image = self.FlippedImage #otoceni image (prvni bool je osa X, druhy Y)
-                self.DivaSeDoprava = False #uz se nediva doprava
-        if pressed[pygame.K_RIGHT]:# or pressed[pygame.K_d]:
+            if self.DivaSeDoprava:
+                self.image = self.FlippedImage if not self.IsCrawling else self.FlippedCrawlingImage
+                self.DivaSeDoprava = False
+
+        elif pressed[pygame.K_RIGHT] or pressed[pygame.K_d]:
             self.vel.x += self.GroundSpeed
-            if not self.DivaSeDoprava: #stejny co vyse
-                CurrentImage = self.StandingImage if not self.IsCrawling else self.CrawlingImage
-                self.image = CurrentImage #tady se ale pouzije origo image
+            if not self.DivaSeDoprava:
+                self.image = self.StandingImage if not self.IsCrawling else self.CrawlingImage
                 self.DivaSeDoprava = True
 
         # Skakani
@@ -337,7 +350,7 @@ class character(pygame.sprite.Sprite):
         else:
             self.IsClimbing = False
         if self.IsClimbing:
-            if pressed[pygame.K_UP]:
+            if pressed[pygame.K_UP] or pressed[pygame.K_w]:
                 self.vel.y = -self.ClimbSpeed
             elif pressed[pygame.K_DOWN]:
                 self.vel.y = self.ClimbSpeed
@@ -500,18 +513,22 @@ class Enemy(pygame.sprite.Sprite):
 
         # Patrol parametry
         self.patrolStart = x #Pocatecni pozice patrolu, rovna se enemy spawnu
-        self.basePatrolRange = 300  # Pocatecni hodnota
-        self.maxPatrolRange = 2000  # Max Vzdalenost kam az dojde behem sveho hledani Hrace, postupne se bude zvetsovat treba (momentalne je mapa 3940 jednotek siroka)
+        self.basePatrolRange = 100  # Pocatecni hodnota
+        self.maxPatrolRange = 1200  # Max Vzdalenost kam az dojde behem sveho hledani Hrace, postupne se bude zvetsovat treba (momentalne je mapa 2,250 (75x30) jednotek siroka)
         self.currentPatrolRange = self.basePatrolRange  # Soucasne nastaveni patrolu
         self.patrolDirection = 1 #haha 1Direction
         self.patrolCycles = 0  # Pocitacka cyklu (protoze chodi tam a zpet)
         self.expandRange = True  # Jestli ma na dalsim cyklu jit dal
+        self.stuck_timer = 0
+        self.last_x_pos = self.pos.x
         
         # Hunt parametry
         self.huntCooldown = 0
-        self.huntSpeed = 300  # Rychlejsi nez hrac kdyz lovi
+        self.huntSpeed = 240  # Pomalejsi nez hrac kdyz lovi
         self.huntRange = 400  # Vzdalenost na jakou detekuje hrace
         self.isHunting = False
+        self.stuck_timer = 0
+    
         
         # skakani
         self.jumpForce = -1000 #stejne jako hrac
@@ -574,31 +591,59 @@ class Enemy(pygame.sprite.Sprite):
             self.DivaSeDoprava = False
 
     def patrol(self, Hrac, CaveRockSprites, time_passed):
-        if self.isHunting: #pokud lovi, spust hunt :)
-            self.hunt(Hrac, CaveRockSprites, time_passed)
-            return
+       if self.isHunting:
+           self.hunt(Hrac, CaveRockSprites, time_passed)
+           return
 
+       if abs(self.pos.x - self.last_x_pos) < 1:
+           self.stuck_timer += time_passed
+       else:
+           self.stuck_timer = 0
+       self.last_x_pos = self.pos.x
 
-        #Pohyb nepritele podle patrolu
-        self.move.x = self.Speed * self.patrolDirection
-        self.pos.x += self.move.x * time_passed
-        self.rect.midbottom = (round(self.pos.x), round(self.pos.y))
-        
-        #Kdyz se dostane na kraj svyho patrol range tak se otoci
-        #TODO: zatim neresi ze se muze zaseknout 
-        distance_from_start = abs(round(self.pos.x) - self.patrolStart)
-        if distance_from_start >= self.currentPatrolRange:
-            self.patrolDirection *= -1  #otocka
-            self.patrolCycles += 1
+       # Movement and climbing
+       wall_ahead = pygame.Rect(
+           self.rect.x + (20 if self.patrolDirection > 0 else -20),
+           self.rect.y,
+           20, self.rect.height
+       )
+   
+       wall_above = pygame.Rect(
+           self.rect.x + (20 if self.patrolDirection > 0 else -20),
+           self.rect.y - 50,
+           20, 50
+       )
 
-        #kazde 2 cykly tj. tam a zpet se prida range
-            if self.patrolCycles % 2 == 0 and self.expandRange:
-                self.currentPatrolRange = min(self.currentPatrolRange + 400, self.maxPatrolRange)
-                self.expandRange = False
-            else:
-                self.expandRange = True
+       is_wall = False
+       can_climb = False
+   
+       for rock in CaveRockSprites:
+           if wall_ahead.colliderect(rock.rect):
+               is_wall = True
+           if wall_above.colliderect(rock.rect):
+               can_climb = True
 
-        self.check_player_visibility(Hrac, CaveRockSprites)
+       if is_wall and can_climb and self.stuck_timer > 0.5:
+           self.move.y = -400  # Climb up
+       elif self.stuck_timer > 2.0:
+           self.patrolDirection *= -1
+           self.stuck_timer = 0
+
+       self.move.x = self.Speed * self.patrolDirection
+       self.pos.x += self.move.x * time_passed
+   
+       # Patrol range logic
+       distance_from_start = abs(round(self.pos.x) - self.patrolStart)
+       if distance_from_start >= self.currentPatrolRange:
+           self.patrolDirection *= -1
+           self.patrolCycles += 1
+           if self.patrolCycles % 2 == 0 and self.expandRange:
+               self.currentPatrolRange = min(self.currentPatrolRange + 400, self.maxPatrolRange)
+               self.expandRange = False
+           else:
+               self.expandRange = True
+           
+       self.check_player_visibility(Hrac, CaveRockSprites)
 
     def check_player_visibility(self, Hrac, CaveRockSprites):
 
@@ -622,14 +667,13 @@ class Enemy(pygame.sprite.Sprite):
         if self.CanCPlayer and distanceToPlayer < self.huntRange and self.huntCooldown <= 0:
             self.isHunting = True
 
-
     def hunt(self, Hrac, CaveRockSprites, time_passed):
         distance = self.pos.distance_to(Hrac.pos)
 
         #Pokud je hrac moc daleko, vrati se zpet k patrolu
-        if distance > self.huntRange * 1.3:  #Trosku vic range nez se vzda
+        if distance > self.huntRange * 1.2:  #Trosku vic range nez se vzda
             self.isHunting = False
-            self.huntCooldown = 2.0  # 2 sekundy cooldown nez muze zase ĺovit
+            self.huntCooldown = 5.0  # 2 sekundy cooldown nez muze zase ĺovit
             return
 
         # Pohyb smerem k hraci
@@ -638,8 +682,10 @@ class Enemy(pygame.sprite.Sprite):
         self.pos.x += self.move.x * time_passed
         
         #Jakmile se dostane blizko, game over
-        if distance < 20:
-            game_over_screen()
+        if distance < 1:
+            print("Byl jsi sežrán pavoukem, škoda")
+            pygame.quit()
+            sys.exit()
 
 
     def check_collisions_x(self, blocks):
@@ -665,13 +711,6 @@ class Enemy(pygame.sprite.Sprite):
                     self.rect.top = block.rect.bottom
                     self.move.y = 0
                 self.pos.y = self.rect.midbottom[1]
-
-
-    def killCheck(self, game_state):
-        kolizeCheck = pygame.sprite.spritecollide(game_state.HracSprite.sprite, game_state.enemy_sprite, False)
-        if kolizeCheck:
-            print('Umrels, prohrals!')
-            game_over_screen()
 
 class GameClock: #tohle je lepsi pocitadlo aby to fungovalo i kdyz hejbes s oknem
     def __init__(self, target_fps=60):
@@ -746,20 +785,23 @@ def game_loop(game_state):
         for enemy in game_state.enemy_sprite.sprites():
             enemy.update(delta_time, game_state.CaveRockSprites)
             enemy.patrol(game_state.player, game_state.CaveRockSprites, game_state.time_passed)
-            enemy.killCheck(game_state)
 
-        
+
+        #Lopata updates
         game_state.lopata.update(game_state.player)
         game_state.lopata.destroyWalls(game_state.CaveRockSprites,game_state.CaveBackgroundSprites, game_state.player, game_state.camera)
+
+        #Finish check
+        game_state.Finish.CheckEndGame(game_state.player, game_state.camera)
 
         #Vykreslovani - renderovani
         render_game(game_state)
 
-def render_game(game_state):
+def render_game(game_state): #TOHLE VSECHNO MELI BEJT FUNKCE NEKDE, ale tak nekde ty radky byt musi ze
     # Clear the lighting engine surface
     lights_engine.clear(0, 0, 0, 255)
     
-    #Vykresleni bloku 
+    #Vykresleni Kamenu v pozadi 
     for sprite in game_state.CaveBackgroundSprites:
         pos = game_state.camera.apply(sprite)
         if pos[0] > -75 and pos[0]<1280 and pos[1]>-75 and pos[1] <720:
@@ -769,8 +811,7 @@ def render_game(game_state):
             source_rect = pygame.Rect(0, 0, sprite.rect.width, sprite.rect.height)
             lights_engine.render_texture(sprite.NormalImage2, pl2d.BACKGROUND, dest_rect, source_rect)
 
-    
-    # Render rock sprites on top of background
+    # Vykresleni Kamenu
     for sprite in game_state.CaveRockSprites:
         pos = game_state.camera.apply(sprite)
         if pos[0] > -75 and pos[0] < 1280 and pos[1] > -75 and pos[1] < 720:
@@ -778,12 +819,21 @@ def render_game(game_state):
             source_rect = pygame.Rect(0, 0, sprite.rect.width, sprite.rect.height)
             lights_engine.render_texture(sprite.NormalImage1, pl2d.BACKGROUND, dest_rect, source_rect)
 
+    #DOMECEK RENDER
+    Domecek = game_state.Finish
+    Domecek_pos = game_state.camera.apply(Domecek)
+    Domecek_dest = pygame.Rect(Domecek_pos[0], Domecek_pos[1], Domecek.converted_surf.get_width(), Domecek.converted_surf.get_height())
+    Domecek_source = pygame.Rect(0, 0, Domecek.converted_surf.get_width(), Domecek.converted_surf.get_height())
+    lights_engine.render_texture(Domecek.Image, pl2d.BACKGROUND, Domecek_dest, Domecek_source)
+
     
     camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y)
 
     # hrac se vsema nalezitostma (rect)
     player = game_state.player
     player_pos = game_state.camera.apply(player)
+    print("next is active player pos")
+    print(player_pos)
     player_dest = pygame.Rect(player_pos[0], player_pos[1], player.rect.width, player.rect.height)
     player_source = pygame.Rect(0, 0, player.rect.width, player.rect.height)
     lights_engine.render_texture(player.image, pl2d.BACKGROUND, player_dest, player_source)
@@ -802,6 +852,7 @@ def render_game(game_state):
     shovel_dest = pygame.Rect(shovel_pos[0], shovel_pos[1], shovel.image.get_width(), shovel.image.get_height())
     shovel_source = pygame.Rect(0, 0, shovel.image.get_width(), shovel.image.get_height())
     lights_engine.render_texture(shovel.texture, pl2d.BACKGROUND, shovel_dest, shovel_source)
+
 
 
     #vykresleni svetla - candle

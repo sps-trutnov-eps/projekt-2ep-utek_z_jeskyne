@@ -12,7 +12,7 @@ game_file = os.path.join(file_dir, "game_engine.py")
 difficulty_file = os.path.join(file_dir, "diff")
 mgc = os.path.join(file_dir, "mgc.py")
 
-subprocess.run([sys.executable, mgc, "25", "100"], timeout=30)
+subprocess.run([sys.executable, mgc, "30", "100"], timeout=4)
 
 
 # Save the difficulty to a file
