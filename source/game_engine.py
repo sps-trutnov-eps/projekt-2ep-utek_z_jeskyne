@@ -22,6 +22,7 @@ Pozadi = os.path.join(parent_dir, "Textury", "Lopata01.png")
 try:
     with open(difficulty_file, "r") as file:
         difficulty = int(file.read().strip())
+        print("Works HERE once")
 except FileNotFoundError:
     print("Error: Difficulty file not found. Using random difficulty.")
     difficulty = random.randint(1,3)
@@ -31,7 +32,7 @@ except ValueError:
 
 
 pygame.init()
-screen = pygame.display.set_mode((1280, 720))
+pygame.display.set_caption('Dangerous Caves')
 
 lights_engine = LightingEngine(
     screen_res=(1280, 720),  # Replace with your screen width and height
@@ -51,7 +52,7 @@ def initGame(difficulty):
     game_state = GameState()
     
     # init pygame
-    pygame.init()
+    #pygame.init()
     
     # init obrazovku a hodiny
     game_state.screen = pygame.display.get_surface()
@@ -71,7 +72,6 @@ def initGame(difficulty):
         for j, y in enumerate(line.strip()):
             if y == '2':
                 random_spawn_points.append((j * 75, i * 75))
-                # Check for two consecutive '2's (space for two-block-tall player)
                 if i - 1 >= 0 and lines[i - 1][j] == '2':  # Block above is also '2'
                     player_spawns.append((j * 75, i * 75))  # Add the lower block as a spawn point
 
@@ -86,12 +86,24 @@ def initGame(difficulty):
     game_state.player = character(x, y, 100, OnGround=True, CharacterSirka= 75, CharacterVyska= 150)
     game_state.HracSprite = pygame.sprite.GroupSingle()
     game_state.HracSprite.add(game_state.player) 
-    
+
+    #enemy
+    for i in range(difficulty):
+        if random_spawn_points:
+            spawn_point = random.choice(random_spawn_points)
+            enemy = Enemy(spawn_point[0], spawn_point[1], True)
+            game_state.enemy_sprite.add(enemy)
+            random_spawn_points.remove(spawn_point)
     
     #Game finish - domecek spawn a init
     game_state.Finish = GameFinish(15*75, -300)
     game_state.FinishSprite = pygame.sprite.GroupSingle()
     game_state.FinishSprite.add(game_state.Finish)
+
+    #Pozadi
+    game_state.Pozadi = Background(0, -300)
+    game_state.PozadiSprite = pygame.sprite.GroupSingle()
+    game_state.PozadiSprite.add(game_state.Pozadi)
     
     #inicializace svicky a svetla
     game_state.Candle = Candle(game_state.player.rect.centerx, game_state.player.rect.centery)
@@ -115,6 +127,10 @@ def initGame(difficulty):
     
     #inicializuj gameclock, kterej se jen stara o to abys mohl hejbat s oknem a nepokazilo to timing
     game_state.game_clock = GameClock(60)
+
+    camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y)
+    game_state.Light.SourceFinish(game_state.Finish, camera_offset)
+    game_state.Light.SourceShovel(game_state.lopata, camera_offset)
     
     return game_state
 
@@ -135,6 +151,21 @@ class GameFinish(pygame.sprite.Sprite):
             sys.exit()
             return True
         return False
+
+class Background(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.x = x
+        self.y = y
+        # Load the background image and scale it to the screen size
+        self.original_surface = pygame.image.load(Pozadi).convert_alpha()
+        self.converted_surf = pygame.transform.scale(self.original_surface, (30*75, 100*75))
+        
+        # Create the texture for the background to work with the lighting engine
+        self.Image = lights_engine.surface_to_texture(self.converted_surf)
+        
+        # Create a rect for positioning (for rendering purposes)
+        self.rect = self.converted_surf.get_rect(topleft=(self.x, self.y))
 
 class Camera:
     def __init__(self, target, screen_width, screen_height):
@@ -177,7 +208,6 @@ class Shovel(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(topleft=(self.posX, self.posY))
         self.durability = 15
         self.is_held = False
-        self.is_active = False
 
     def update(self, player):
         if not self.is_held and self.rect.colliderect(player.rect):
@@ -403,12 +433,9 @@ class character(pygame.sprite.Sprite):
 
 class Light:
     def __init__(self, x, y):
-        self.head_light = PointLight(
-            position=(x,y),        #souradnice x, y
-            power = 3,            # Default power
-            radius = 300,         #
-        )
-        self.head_light.set_color(255,100,0, 255)
+        self.color = 255,100,0, 255
+        self.head_light = PointLight(position=(x,y), power = 1, radius = 400)
+        self.head_light.set_color(self.color)
         lights_engine.lights.append(self.head_light)
 
     def createSource(self, player, camera_offset):
@@ -418,6 +445,20 @@ class Light:
 
         # Update the head light position
         self.head_light.position = (head_x, head_y)
+
+    def SourceFinish(self, domecek, camera_offset):
+        dum_x = float(domecek.rect.centerx - camera_offset[0])
+        dum_y = float(domecek.rect.centery - camera_offset[1])
+        light_at_house = PointLight(position=(dum_x, dum_y), power=1, radius=750)
+        light_at_house.set_color(self.color)
+        #lights_engine.lights.append(light_at_house)
+
+    def SourceShovel(self, lopata, camera_offset):
+        lopata_x = float(lopata.rect.centerx - camera_offset[0])
+        lopata_y = float(lopata.rect.centery - camera_offset[1])
+        light_at_lopata = PointLight(position=(lopata_x, lopata_y), power=1, radius=150)
+        light_at_lopata.set_color(self.color)
+        #lights_engine.lights.append(light_at_lopata)
 
 class Candle:
     def __init__(self, x, y):
@@ -623,8 +664,8 @@ class Enemy(pygame.sprite.Sprite):
            if wall_above.colliderect(rock.rect):
                can_climb = True
 
-       if is_wall and can_climb and self.stuck_timer > 0.5:
-           self.move.y = -400  # Climb up
+       if is_wall and can_climb and self.stuck_timer > 0.2:
+           self.move.y = self.jumpForce  # Jumps up
        elif self.stuck_timer > 2.0:
            self.patrolDirection *= -1
            self.stuck_timer = 0
@@ -746,10 +787,10 @@ class GameState:
         self.time_passed = None
 
 def initPygame():
-    pygame.init()
-    screen = pygame.display.set_mode((1280, 720))
+    #pygame.init()
+    #screen = pygame.display.set_mode((1280, 720))
     clock = pygame.time.Clock()
-    return screen, clock
+    return clock#, screen, 
 
 def CreateMap():
     CaveRockSprites = pygame.sprite.Group()
@@ -800,6 +841,13 @@ def game_loop(game_state):
 def render_game(game_state): #TOHLE VSECHNO MELI BEJT FUNKCE NEKDE, ale tak nekde ty radky byt musi ze
     # Clear the lighting engine surface
     lights_engine.clear(0, 0, 0, 255)
+
+    #  #POZADI
+    # Pozadi = game_state.Pozadi
+    # Pozadi_pos = game_state.camera.apply(Pozadi)
+    # Pozadi_dest = pygame.Rect(Pozadi_pos[0], Pozadi_pos[1], Pozadi.converted_surf.get_width(), Pozadi.converted_surf.get_height())
+    # Pozadi_source = pygame.Rect(0, 0, Pozadi.converted_surf.get_width(), Pozadi.converted_surf.get_height())
+    # lights_engine.render_texture(Pozadi.Image, pl2d.FOREGROUND, Pozadi_dest, Pozadi_source)
     
     #Vykresleni Kamenu v pozadi 
     for sprite in game_state.CaveBackgroundSprites:
@@ -824,16 +872,13 @@ def render_game(game_state): #TOHLE VSECHNO MELI BEJT FUNKCE NEKDE, ale tak nekd
     Domecek_pos = game_state.camera.apply(Domecek)
     Domecek_dest = pygame.Rect(Domecek_pos[0], Domecek_pos[1], Domecek.converted_surf.get_width(), Domecek.converted_surf.get_height())
     Domecek_source = pygame.Rect(0, 0, Domecek.converted_surf.get_width(), Domecek.converted_surf.get_height())
-    lights_engine.render_texture(Domecek.Image, pl2d.BACKGROUND, Domecek_dest, Domecek_source)
-
+    lights_engine.render_texture(Domecek.Image, pl2d.FOREGROUND, Domecek_dest, Domecek_source)
     
     camera_offset = (game_state.camera.offset.x, game_state.camera.offset.y)
 
     # hrac se vsema nalezitostma (rect)
     player = game_state.player
     player_pos = game_state.camera.apply(player)
-    print("next is active player pos")
-    print(player_pos)
     player_dest = pygame.Rect(player_pos[0], player_pos[1], player.rect.width, player.rect.height)
     player_source = pygame.Rect(0, 0, player.rect.width, player.rect.height)
     lights_engine.render_texture(player.image, pl2d.BACKGROUND, player_dest, player_source)
@@ -851,7 +896,8 @@ def render_game(game_state): #TOHLE VSECHNO MELI BEJT FUNKCE NEKDE, ale tak nekd
     shovel_pos = game_state.camera.apply(shovel)
     shovel_dest = pygame.Rect(shovel_pos[0], shovel_pos[1], shovel.image.get_width(), shovel.image.get_height())
     shovel_source = pygame.Rect(0, 0, shovel.image.get_width(), shovel.image.get_height())
-    lights_engine.render_texture(shovel.texture, pl2d.BACKGROUND, shovel_dest, shovel_source)
+    if not shovel.is_held:
+        lights_engine.render_texture(shovel.texture, pl2d.BACKGROUND, shovel_dest, shovel_source)
 
 
 
@@ -859,6 +905,7 @@ def render_game(game_state): #TOHLE VSECHNO MELI BEJT FUNKCE NEKDE, ale tak nekd
     game_state.Candle.createSourceCandle(game_state.player, game_state.screen, camera_offset)
 
     game_state.Light.createSource(game_state.player, camera_offset)
+
 
     lights_engine.render()
 

@@ -60,7 +60,6 @@ class kapka :
 		self.y = m[1]
 def savemap(map) :
 	fmap = open(map_file, "w")
-	print("uklada se to")
 	for x in map :
 		buffer = ""
 		for y in x :
