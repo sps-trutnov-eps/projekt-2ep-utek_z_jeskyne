@@ -1,3 +1,5 @@
+> Žákovský projekt třídy 2.EP, školní rok 2024/25, SPŠ Trutnov. Projekt se už neudržuje.
+
 # Útěk z jeskyně k povrchu
 
 V `source` stačí spustit soubor `main.py`.
